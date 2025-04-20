@@ -43,7 +43,9 @@ import {
   Canvas,
   Rect,
   PencilBrush,
-  Image as FabricImage
+  Image as FabricImage,
+  Control,
+  controlsUtils
 } from 'fabric';
 
 // 画布相关引用
@@ -90,9 +92,151 @@ const initFabricCanvas = () => {
     
     // 设置背景图片
     setBackgroundImage();
+    
+    // 扩展矩形对象，添加中点控制点
+    extendRectWithMidControls();
+    
   } catch (error) {
     console.error('初始化Fabric画布时发生错误:', error);
   }
+};
+
+/**
+ * 扩展矩形对象，添加中点控制点
+ */
+const extendRectWithMidControls = () => {
+  // 扩展矩形的控制点配置，添加边的中点控制点
+  Rect.prototype.controls = {
+    ...Rect.prototype.controls,
+    // 添加四边的中点控制点，允许自由变换
+    ml: new Control({
+      x: -0.5,
+      y: 0,
+      cursorStyle: 'move',
+      actionHandler: function(eventData, transformData, x, y) {
+        const target = transformData.target;
+        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+        
+        // 允许同时控制宽度和位置
+        const originalWidth = target.width;
+        target.set({
+          width: Math.abs(localPoint.x * 2),
+          left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+        });
+        
+        // 同时允许调整高度
+        if (eventData.shiftKey) {
+          const originalHeight = target.height;
+          target.set({
+            height: Math.abs(localPoint.y * 2),
+            top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+          });
+        }
+        
+        return true;
+      },
+      actionName: 'free-transform',
+    }),
+    mt: new Control({
+      x: 0,
+      y: -0.5,
+      cursorStyle: 'move',
+      actionHandler: function(eventData, transformData, x, y) {
+        const target = transformData.target;
+        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+        
+        // 允许同时控制高度和位置
+        const originalHeight = target.height;
+        target.set({
+          height: Math.abs(localPoint.y * 2),
+          top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+        });
+        
+        // 同时允许调整宽度
+        if (eventData.shiftKey) {
+          const originalWidth = target.width;
+          target.set({
+            width: Math.abs(localPoint.x * 2),
+            left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+          });
+        }
+        
+        return true;
+      },
+      actionName: 'free-transform',
+    }),
+    mr: new Control({
+      x: 0.5,
+      y: 0,
+      cursorStyle: 'move',
+      actionHandler: function(eventData, transformData, x, y) {
+        const target = transformData.target;
+        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+        
+        // 允许同时控制宽度和位置
+        const originalWidth = target.width;
+        target.set({
+          width: Math.abs(localPoint.x * 2),
+          left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+        });
+        
+        // 同时允许调整高度
+        if (eventData.shiftKey) {
+          const originalHeight = target.height;
+          target.set({
+            height: Math.abs(localPoint.y * 2),
+            top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+          });
+        }
+        
+        return true;
+      },
+      actionName: 'free-transform',
+    }),
+    mb: new Control({
+      x: 0,
+      y: 0.5,
+      cursorStyle: 'move',
+      actionHandler: function(eventData, transformData, x, y) {
+        const target = transformData.target;
+        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+        
+        // 允许同时控制高度和位置
+        const originalHeight = target.height;
+        target.set({
+          height: Math.abs(localPoint.y * 2),
+          top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+        });
+        
+        // 同时允许调整宽度
+        if (eventData.shiftKey) {
+          const originalWidth = target.width;
+          target.set({
+            width: Math.abs(localPoint.x * 2),
+            left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+          });
+        }
+        
+        return true;
+      },
+      actionName: 'free-transform',
+    }),
+  };
+};
+
+/**
+ * 设置矩形的控制点样式和行为
+ */
+const setupRectControls = (rect) => {
+  rect.set({
+    transparentCorners: false,
+    borderColor: '#51B9F9',
+    cornerColor: '#51B9F9',
+    cornerSize: 8,
+    cornerStyle: 'circle',
+    hasControls: true,
+    hasBorders: true,
+  });
 };
 
 /**
@@ -120,11 +264,10 @@ const setBackgroundImage = () => {
       fill: '#80deea',
       stroke: '#00acc1',
       strokeWidth: 2,
-      transparentCorners: false,
-      borderColor: '#51B9F9',
-      cornerColor: '#51B9F9',
-      cornerSize: 8
     });
+    
+    // 设置控制点样式
+    setupRectControls(centerRect);
     
     fabricCanvas.add(centerRect);
     fabricCanvas.renderAll();
@@ -183,11 +326,10 @@ const onMouseDown = (options) => {
     stroke: '#000',
     strokeWidth: 1,
     selectable: true,
-    transparentCorners: false,
-    borderColor: '#51B9F9',
-    cornerColor: '#51B9F9',
-    cornerSize: 8
   });
+  
+  // 设置控制点样式
+  setupRectControls(currentRect);
   
   // 添加到画布
   fabricCanvas.add(currentRect);
