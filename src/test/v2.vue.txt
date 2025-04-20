@@ -1,0 +1,1932 @@
+<template>
+    <div>
+        <AiPicTopNav index="13"></AiPicTopNav>
+        <div class="ai-pic-container">
+            <el-row :gutter="20">
+                <el-col :span="12">
+                    <div class="ai-pic-mod-box">
+                        <div class="ai-pic-mod-box__hd">
+                            <div class="ai-pic-mod-box__hd__title">选择产品</div>
+                        </div>
+                        <div class="ai-pic-mod-box__bd" v-loading="viewRecognitionLoading" element-loading-text="正在识别产品角度，请稍候">
+                            <el-radio-group class="product-upload-type" v-model="productUploadType" @change="onChangeProductUploadType">
+                                <el-radio-button label="1" > 搜索产品 </el-radio-button>
+                                <el-radio-button label="2"> 上传产品白底图 </el-radio-button>
+                            </el-radio-group>
+                        
+                            <div v-show="productUploadType == '1'">
+                                <el-form-item>
+                                    <el-input
+                                        class="ai-pic-custom-input"
+                                        v-model="productSearchObj.productSearchFieldContent"
+                                        :placeholder="`请输入${productSearchObj.productSearchField === 'model' ? '型号' : '产品编码'},点击右侧搜索按钮，或敲击回车键检索`"
+                                        @keyup.enter="onSearch"
+                                    >
+                                        <template #prepend>
+                                            <el-select
+                                                v-model="productSearchObj.productSearchField"
+                                                @change="resetSearchFieldContent"
+                                                placeholder="Select"
+                                                style="width: 115px"
+                                            >
+                                                <el-option label="产品型号" value="model" />
+                                                <el-option label="产品编码" value="itemCode" />
+                                            </el-select>
+                                        </template>
+                                        <template #suffix>
+                                            <div
+                                                
+                                                class="search-result-wrap"
+                                                ref="searchProductResultDiv"
+                                                tabindex="0"
+                                                v-if="isShowProductSearchPopup"
+                                                @clickoutside="hideOverlay"
+                                                @keyup.enter="onSelectProduct(productListActiveIndex)"
+                                                @keydown.arrow-up.prevent="onMoveProductUp"
+                                                @keydown.arrow-down.prevent="onMoveProductDown"
+                                            >
+                                                <ul class="search-result-list">
+                                                    <template v-if="productList.length">
+                                                        <li
+                                                            :class="
+                                                                'search-result-item ' +
+                                                                (index == productListActiveIndex
+                                                                    ? 'search-result-item--active'
+                                                                    : '')
+                                                            "
+                                                            v-for="(item, index) in productList"
+                                                            @click="onSelectProduct(index)"
+                                                        >
+                                                            <div class="search-result-item__product-img">
+                                                                <img :src="item.mainPic" alt="" />
+                                                            </div>
+                                                            <div class="search-result-item__product-info">
+                                                                <el-tooltip
+                                                                    effect="dark"
+                                                                    placement="top-start"
+                                                                    :content="item.title"
+                                                                >
+                                                                    <p class="search-result-item__product-title">
+                                                                        {{ item.title }}
+                                                                    </p>
+                                                                </el-tooltip>
+                                                                <p class="search-result-item__product-model">
+                                                                    型号：{{ item.model }}
+                                                                </p>
+                                                                <p class="search-result-item__product-code">
+                                                                    产品编码{{ item.itemCode }}
+                                                                </p>
+                                                            </div>
+                                                        </li>
+                                                    </template>
+                                                    <template v-else>
+                                                        <li class="search-result-item search-result-item--empty">
+                                                            没有找到产品信息
+                                                        </li>
+                                                    </template>
+                                                </ul>
+                                            </div>
+                                        </template>
+                                        <template #append>
+                                            <el-button
+                                                :disabled="productSearchDisabled"
+                                                @click="onSearch('btn')"
+                                                :icon="Search"
+                                            />
+                                        </template>
+                                    </el-input>
+                                </el-form-item>
+                                <div style="margin-bottom: 10px;">
+                                    <span>试一试：</span>
+                                    <!-- <span
+                                        class="ai-pic-product-type"
+                                        @click="clickTry('KFR-50GW')"
+                                    >
+                                        KFR-50GW
+                                    </span>                                    
+                                    <span
+                                        class="ai-pic-product-type"
+                                        @click="clickTry('TG100V86WMDY5')"
+                                    >
+                                    TG100V86WMDY5
+                                    </span>                                     -->
+                                    <span
+                                        class="ai-pic-product-type"
+                                        v-for="item of prodectType"
+                                        :key="item"
+                                        @click="clickTry(item)"
+                                    >
+                                        {{ item }}
+                                    </span>
+                                </div>
+                                <p style="margin-bottom: 10px;"  v-if="mainPicList.length && !showSearchProductLoading" >请选择产品图：</p>                             
+                                <div v-if="mainPicList.length && !showSearchProductLoading" class="create-img-outer-box face-style-box" >
+                                    
+                                    <div class="create-img-inner-box" v-for="(item, index) in mainPicList" :key="index"  @click="onSelectProductMainPic(index)">
+                                        <div class="create-img-box"  :class="{ 'create-img-box--selected': item.selected }"  title="">
+                                            <el-image class="create-img-box__img" :src="item.image_url" fit="contain" />
+                                            <el-icon class="create-img-box___img-selected-icon"><Select /></el-icon>
+                                        </div>
+                                        <p  v-show="item.perspective && item.perspective !=='unknown'" class="create-img-box__text">{{ productPerspectiveMap[item.perspective] }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="custom-loading" v-if="showSearchProductLoading" >
+                                    <img width="150" src="https://pic.mdcdn.cn/pc/img/ai/loading.gif" />
+                                </div>
+                                <div  v-if="(mainPicList.length && !currentCategoryIsInWhtieList) || detectProductPerspectiveFail" class="select-view">
+                                    {{detectProductPerspectiveFail ? '识别产品角度失败，请手动标注：':'因当前品类的产品图视角暂不支持AI识别，请在选择产品图之后手动标注：'}}
+                                    <el-radio-group class="product-view-type" size="small" v-model="currentView" @change="onSelectProductViewType">
+                                        <el-radio-button label="front" > 正视图 </el-radio-button>
+                                        <el-radio-button label="left"> 左视图 </el-radio-button>
+                                        <el-radio-button label="right"> 右视图 </el-radio-button>
+                                    </el-radio-group>
+                                </div>
+                            </div>
+                            <div v-show="productUploadType == '2'">
+
+                                <el-upload
+                                        v-if="!customUploadProductPic"
+                                        :show-file-list="false"
+                                        :on-success="onUploadProductPicSuccess"
+                                        class="upload-box"
+                                        drag
+                                        action="/appdata/ecm_aigc/drawer/upload_image"
+                                        multiple
+                                    >
+                                        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                                        <div class="el-upload__text">点击或拖动文件到这里上传图片</div>
+                                        <template #tip>
+                                            <div class="sketch-upload-tips">
+                                                <el-text class="mx-1" type="danger">1、请上传产品白底图</el-text>
+                                            </div>
+                                            <div class="sketch-upload-tips">
+                                                <el-text class="mx-1" type="">2、可上传不超过10MB的JPG、PNG、JPEG的图片</el-text>
+                                            </div>
+                                        </template>
+                                    </el-upload>
+                                    <template v-else>
+                                        <div class="custom-upload-product-pic">
+                                            <el-image :src="customUploadProductPic" fit="contain" />
+                                        </div>
+                                        
+                                            <el-upload
+                                                v-if="productUploadType == '2' && customUploadProductPic"
+                                                :disabled="generateProcessState == 1" 
+                                                class="custom-product-reupload"
+                                                action="/appdata/ecm_aigc/drawer/upload_image"
+                                                :show-file-list="false"
+                                                :on-success="onUploadProductPicSuccess"
+                                            >
+                                                <el-button plain :disabled="false">重新上传</el-button>
+                                            </el-upload>                                            
+
+
+
+                                        <div   class="select-view">
+                                            <span class="select-view-txt">{{'手动上传的产品白底图暂不支持AI识别产品视角，请手动标注你上传的产品图视角是：'}}</span>
+                                            <el-radio-group class="product-view-type" size="small" v-model="currentView" @change="onSelectProductViewType">
+                                                <el-radio-button label="front" > 正视图 </el-radio-button>
+                                                <el-radio-button label="left"> 左视图 </el-radio-button>
+                                                <el-radio-button label="right"> 右视图 </el-radio-button>
+                                            </el-radio-group>
+                                        </div>
+                                    </template>
+                            </div>
+                        </div>
+                    </div>                    
+                    <div class="ai-pic-mod-box">
+                        <div class="ai-pic-mod-box__hd">
+                            <div class="ai-pic-mod-box__hd__title">选择场景</div>
+                        </div>
+                        <div class="ai-pic-mod-box__bd">
+                            <el-radio-group class="scene-opt-type" v-model="sceneType" @change="onChangeSceneType">
+                                <el-radio-button label="1" > 预置场景 </el-radio-button>
+                                <el-radio-button label="2"> 上传场景图 </el-radio-button>
+                            </el-radio-group>
+                            <el-upload
+                                v-if="sceneType == '2' && (backgroundImage.url || uploadPicUrl)"
+                                :disabled="generateProcessState == 1" 
+                                class="custom-reupload"
+                                action="/appdata/ecm_aigc/drawer/upload_image"
+                                :show-file-list="false"
+                                :on-success="onUploadSuccess"
+                                :before-upload="onUploadBefore"
+                            >
+                                <el-button plain :disabled="false">重新上传</el-button>
+                            </el-upload>                            
+                            <el-button v-show="sceneType == '2'" class="import-from-btn" plain :disabled="generateProcessState == 1" @click="showGalleryDialog(1)">
+                                从[社区/我的]导入
+                            </el-button>
+                            <!-- <el-form-item class="ai-pic-change-input">
+                                <el-select
+                                    v-model="selectProduct"
+                                    placeholder="请选择产品"
+                                    @change="changeSearchCategory"
+                                >
+                                    <el-option v-for="ent in productTypeList" :label="ent.name" :value="ent.id" />
+                                </el-select>
+                            </el-form-item> -->
+                            <div v-show="sceneType == '1'">
+                                <div v-if="sceneFirstShowTips" class="opt-tips ">
+                                    <p>以下是部分预置场景预览，请先在上方选择产品，系统会根据品类为你输出最合适的预置场景图</p>
+                                </div>
+                                <div class="ai-pic-waterfall-box" v-if="list.length">
+
+
+                                    <Waterfall
+                                        :list="list"
+                                        :gutter="10"
+                                        :width="200"
+                                        :breakpoints="pageConfig.breakpoints"
+                                        :hasAroundGutter="false"
+                                    >
+                                        <template #item="{ item, index }">
+                                            <div
+                                                :class="currentSelect === index ? 'custom-waterfall' : ''"
+                                                @click="selectPicture(index)"
+                                            >
+                                                <LazyImg :url="item.thumb_url" @dblclick="showPicture(index)" />
+                                                <el-icon v-show="currentSelect === index" class="selected-icon">
+                                                    <Select />
+                                                </el-icon>
+                                            </div>
+                                        </template>
+                                    </Waterfall>
+                                    <!-- <el-button
+                                        v-if="pageConfig.total"
+                                        :loading="pageConfig.loading"
+                                        @click="queryPresetSceneList"
+                                        :disabled="pageConfig.tips === '暂无更多数据'"
+                                    >
+                                        {{ pageConfig.tips }}
+                                    </el-button> -->
+                                </div>
+                                <el-empty
+                                    v-show="list.length === 0"
+                                    :image-size="100"
+                                    description="此品类或产品视角暂无预置场景图，敬请期待，如有添加需求，请联系（wulq3）沟通。您可以手动上传场景图"
+                                />                                
+                            </div>
+                            <div v-show="sceneType == '2'">
+
+                                <div v-show="backgroundImage.url !== '' && currentView == 'front'">
+
+                                    <div class="opt-tips ">
+                                        <p>请将产品缩放移动到希望替换或放置的位置，越精准效果越好</p>
+                                    </div>
+                                    <div class="opt-row" v-if="uploadPicUrl || backgroundImage.url">
+
+                                        <el-radio-group v-if="genSceneRepaintResultImgURL" class="repaint-result-switch-mode" size="small" v-model="repaintResultSwitchMode" @change="onChangRepaintResultSwitchMode">
+                                            <el-radio-button label="1" title="对比"> <el-icon><Reading /></el-icon> </el-radio-button>
+                                            <el-radio-button label="2" title="涂抹编辑"> <el-icon><EditPen /></el-icon> </el-radio-button>
+                                        </el-radio-group>
+                                        <el-button v-if="genSceneRepaintResultImgURL"  class="repaint-undo-btn" size="small" plain @click="onUndoRepaint">还原</el-button>
+                                        <el-button  class="repaint-btn" type="primary" size="small" plain @click="onRepaint" :disabled="genSceneRepaintProcessState == 1">洗图</el-button>
+                                        <el-tooltip content="规避原图侵权风险，对原图进行重绘" placement="top">
+                                            <el-icon size="18"  class="repaint-btn-info"><QuestionFilled /></el-icon>
+                                        </el-tooltip>
+                                    </div>
+                                    <div style="position: relative;">
+                                        <div v-show="genSceneRepaintProcessState !== 1" class="custom-image" ref="container">
+                                            <img
+                                                ref="backgroundImageDiv"
+                                                :src="backgroundImage.url"
+                                                alt="Background"
+                                                style="display: block; width: 100%"
+                                            />
+                                            <Vue3DraggableResizable
+                                                v-if="state.imageLoaded"
+                                                :initW="state.width"
+                                                :initH="state.height"
+                                                :min-width="50"
+                                                :min-height="50"
+                                                :max-width="state.maxWidth"
+                                                :max-height="state.maxHeight"
+                                                v-model:x="state.posX"
+                                                v-model:y="state.posY"
+                                                v-model:w="state.width"
+                                                v-model:h="state.height"
+                                                v-model:active="state.active"
+                                                :draggable="true"
+                                                :resizable="true"
+                                                :lockAspectRatio="true"
+                                                @dragover="handleDragOver"
+                                                :style="`background: url(${overImage.url}) 0% 0% / 100% no-repeat; opacity: 0.6`"
+                                                class="vdr-draggable"
+                                            ></Vue3DraggableResizable>
+                                        </div>
+                                        <div style="position: absolute;width: 100%;top: 0;" v-show="repaintResultSwitchMode == '1'">
+                                            <AiPicCompareImage :bottomImg="genSceneRepaintCacheImgURL" :upperImg="genSceneRepaintResultImgURL"></AiPicCompareImage>
+                                        </div>                                        
+                                    </div>
+
+
+
+                                    <div v-if="genSceneRepaintProcessState == 1" class="repainting">
+                                        <img src="https://pic.mdcdn.cn/pc/img/ai/loading.gif"/>
+                                        <p>{{genSceneRepaintProcessText}}</p>
+                                    </div>
+
+
+
+                                   
+
+
+                                </div>
+                                <div v-show="currentView !== 'front'">
+                                    <div v-if="uploadPicUrl" class="opt-tips ">
+                                        <p>请在场景图上涂抹要换上产品的位置，越精准效果越好</p>
+                                    </div>
+                                    <div class="opt-row" v-if="uploadPicUrl">
+                                        <el-button v-show="repaintResultSwitchMode == '2'" class="clear-brush" plain size="small" @click="clearBrush" :disabled="generateSceneProcessState == 2 ">重新涂抹</el-button>
+                                        <el-radio-group class="brush-opt-type" v-show="repaintResultSwitchMode == '2'" size="small" v-model="brushType" @change="onChangBrushType">
+                                            <el-radio-button label="1" > <el-icon><Crop /></el-icon> </el-radio-button>
+                                            <el-radio-button label="2"> <el-icon><Brush /></el-icon> </el-radio-button>
+                                        </el-radio-group>
+
+                                        
+                                        <div v-show="repaintResultSwitchMode == '2'" v-if="brushType == '2'" class="change-brush-num"><span class="change-brush-num-title">画笔粗细：</span><el-slider :disabled="generateSceneProcessState == 2 " class="brush-num-slider" style="width:150px" v-model="brushNum" @change="changeBrushNum" /></div>
+                                        
+                                        <el-radio-group v-if="genSceneRepaintResultImgURL" class="repaint-result-switch-mode" size="small" v-model="repaintResultSwitchMode" @change="onChangRepaintResultSwitchMode">
+                                            <el-radio-button label="1" title="对比"> <el-icon><Reading /></el-icon> </el-radio-button>
+                                            <el-radio-button label="2" title="涂抹编辑"> <el-icon><EditPen /></el-icon> </el-radio-button>
+                                        </el-radio-group>
+                                        <el-button v-if="genSceneRepaintResultImgURL"  class="repaint-undo-btn" size="small"  @click="onUndoRepaint">还原</el-button>
+                                        <el-button  class="repaint-btn" type="primary" size="small" plain @click="onRepaint">洗图</el-button>
+                                        <el-tooltip content="规避原图侵权风险，对原图进行重绘" placement="top">
+                                            <el-icon size="18"  class="repaint-btn-info"><QuestionFilled /></el-icon>
+                                        </el-tooltip>
+                                    </div>
+                                    <div style="position: relative;" v-show="uploadPicUrl && genSceneRepaintProcessState !== 1">
+                                        <div id="canvasBox" class="canvas-box" >
+                                            <div class="generating-mask" v-if="generateSceneProcessState == 2" :style="{width:canvasWidthRef + 'px',height:canvasHeightRef + 'px'}"></div>
+                                            <canvas id="canvas" ></canvas>
+                                        </div>
+                                        <div v-show="repaintResultSwitchMode == '1'" style="position: absolute;width: 100%;top: 0;">
+                                            <AiPicCompareImage :bottomImg="genSceneRepaintCacheImgURL" :upperImg="genSceneRepaintResultImgURL"></AiPicCompareImage>
+                                        </div>
+
+                                    </div>
+
+
+                                    <canvas style="display: none;" id="resizedCanvas"></canvas>
+                                    <div style="display:none"><canvas id="backgroundCanvas"></canvas></div>
+                                    <div style="display:none"><canvas id="brushCanvas"></canvas></div>
+
+                                    <div v-if="genSceneRepaintProcessState == 1" class="repainting">
+                                        <img src="https://pic.mdcdn.cn/pc/img/ai/loading.gif"/>
+                                        <p>{{genSceneRepaintProcessText}}</p>
+                                    </div>                                    
+                                </div>
+                                <div v-if="!backgroundImage.url  && !uploadPicUrl">
+                                    <el-upload
+                                        :show-file-list="false"
+                                        :on-success="onUploadSuccess"
+                                        class="upload-box"
+                                        drag
+                                        action="/appdata/ecm_aigc/drawer/upload_image"
+                                        multiple
+                                    >
+                                        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+                                        <div class="el-upload__text">点击或拖动文件到这里上传图片</div>
+                                        <template #tip>
+                                            <div class="sketch-upload-tips">
+                                                <el-text class="mx-1" type="danger">1、为了更好的效果，请尽量上传与产品图角度匹配的参考图</el-text>
+                                            </div>
+                                            <div class="sketch-upload-tips">
+                                                <el-text class="mx-1" type="">2、可上传不超过10MB的JPG、PNG、JPEG的图片</el-text>
+                                            </div>
+                                        </template>
+                                    </el-upload>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="create-action-box">
+                        <el-button
+                            type="primary"
+                            @click="onGenerate"
+                            :disabled="generateSceneProcessState == 2"
+                        >
+                            立即生成
+                        </el-button>
+                    </div>
+                </el-col>
+                <el-col :span="12">
+                    <div class="ai-pic-mod-box ai-pic-mod-box--generate-result">
+                        <div class="ai-pic-mod-box__hd">
+                            <div class="ai-pic-mod-box__hd__title">生成结果</div>
+                        </div>
+                        <div class="ai-pic-mod-box__bd">
+                            <template v-if="sceneType == '1'">
+                                <template v-if=" currentSelect > -1">
+                                    <div v-if="generateSceneProcessState === 3">
+                                        <AiPicCompareImage :bottomImg="bottomImg" :upperImg="upperImg"></AiPicCompareImage>
+                                        <div class="create-action-download" v-if="generateSceneProcessState === 3">
+                                            <el-button plain :disabled="generateProcessState == 1" @click="onDownLoad" type="primary">
+                                                下载
+                                            </el-button>
+                                            <el-button plain :disabled="generateProcessState == 1" @click="onSave">
+                                                保存到我的
+                                            </el-button>
+                                        </div>                                        
+                                    </div>
+                                    <div v-else-if="generateSceneProcessState === 0">
+                                        <img :src="currentSelectBg" alt="" class="custom-img-box" />
+                                    </div>
+                                    
+                                    <div class="recognizing" v-else-if="generateSceneProcessState === 5">
+                                        <el-alert :title="generateFailMsg" type="error" :closable="false" show-icon />
+                                    </div>
+                                    <div class="recognizing" v-else>
+                                        <img src="https://pic.mdcdn.cn/pc/img/ai/loading.gif" />
+                                        <div>{{ generateProcessText }}</div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div>请先完成左侧配置，选择产品图及场景图</div>
+                                </template>
+                            </template>
+
+                            <template v-if="sceneType == '2'">
+                                <template v-if="uploadPicUrl || backgroundImage.url">
+                                    <div v-if="generateSceneProcessState === 3">
+                                        <AiPicCompareImage :bottomImg="bottomImg" :upperImg="upperImg"></AiPicCompareImage>
+                                        <div class="create-action-download" v-if="generateSceneProcessState === 3">
+                                            <el-button plain :disabled="generateProcessState == 1" @click="onDownLoad" type="primary">
+                                                下载
+                                            </el-button>
+                                            <el-button plain :disabled="generateProcessState == 1" @click="onSave">
+                                                保存到我的
+                                            </el-button>
+                                        </div>                                        
+                                    </div>
+                                    <div v-else-if="generateSceneProcessState === 0">
+                                        <div>完成配置后请点击立即生成</div>
+                                    </div>
+                                    
+                                    <div class="recognizing" v-else-if="generateSceneProcessState === 5">
+                                        <el-alert :title="generateFailMsg" type="error" :closable="false" show-icon />
+                                    </div>
+                                    <div class="recognizing"  v-else-if="generateSceneProcessState === 2">
+                                        <img src="https://pic.mdcdn.cn/pc/img/ai/loading.gif" />
+                                        <div>{{ generateProcessText }}</div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div>请先完成左侧配置，选择产品图及场景图</div>
+                                </template> 
+
+                            </template >
+
+
+                           
+
+                        </div>
+
+
+                    </div>
+                </el-col>
+            </el-row>
+        </div>
+        <AiPicViewer
+            v-model:visible="picViewer.visible"
+            :list="currentPicViewList"
+            :index="picViewer.index"
+        ></AiPicViewer>
+        <el-dialog v-model="dialogVisible" title="提示" width="30%">
+            <span>您已经合成了图片，是否确认切换场景，切换后合成图将会被清空，请及时保存</span>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="dialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="onConfirmChange">确认</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+
+
+        <AIPicListDialog v-if="galleryDialogConfig.visible" :imgType="galleryDialogConfig.imgType" @close="closeOrConfirmDialog" @confirm="closeOrConfirmDialog"></AIPicListDialog>
+    </div>
+</template>
+
+<script lang="ts" setup>
+import { reactive, ref, watch, onMounted, Ref, nextTick } from 'vue'
+import AiPicTopNav from '../components/AiPicTopNav.vue'
+import { Search } from '@element-plus/icons-vue'
+import { fabric } from 'fabric-with-erasing';
+import AiPicCompareImage from '../components/AiPicCompareImage.vue'
+import { ElMessage,ElLoading, ElMessageBox } from 'element-plus'
+import type { UploadProps } from 'element-plus'
+import { AiPicUrlApi, ProductSellingWritingApi } from '../api/api.js'
+import { downloadImage } from '../utils/util.js'
+import { LazyImg, Waterfall } from 'vue-waterfall-plugin-next'
+import { loadImage,loopRequestGenerateResult } from '../utils/util.js'
+import AIPicListDialog from "../components/AIPicListDialog.vue"
+
+//产品图上传方式：1-选择 2-上传
+const productUploadType : Ref<string> = ref('1');
+//场景图上传方式：1-选择预置场景 2-手动上传
+const sceneType: Ref<string> = ref('1');
+//当前产品的视角：front-正视图 left-左视图 right-右视图 unknown-无法识别
+const currentView : Ref<string> = ref('');
+//笔刷类型：1:矩形 2:画笔
+const brushType : Ref<string> = ref('1');
+const sceneFirstShowTips : Ref<boolean> = ref(true);
+
+const productPerspectiveMap = {
+    'front': '正视图',
+    'left': '左视图',
+    'right': '右视图',
+    'unknown':'无法识别'
+}
+
+const detectProductPerspectiveFail: Ref<boolean> = ref(false)
+const currentSkuInfo : Ref<any> = ref({});
+const currentCategory: Ref<number> = ref(30);
+const currentProductImageURL :Ref<string> = ref('');
+const currentProductImageMattingURL :Ref<string> = ref('');
+const categoryWhiteList = [{ id: 60, name: '洗衣机' }, { id: 30, name: '空调套机' },{ id: 105, name: '空调内机' }]
+const mainPicList: Ref<MainPicItem[]> = ref([]);
+const selectProduct: Ref<string> = ref('30')
+const customUploadProductPic :Ref<string> = ref('');
+//试一试
+const prodectType: Ref<string[]> = ref([])
+const currentSource: Ref<number> = ref(8)
+const currentSelect: Ref<number> = ref(-1)
+const currentSelectBg: Ref<string> = ref('')
+const generateFailMsg: Ref<string> = ref('')
+const currentCategoryIsInWhtieList : Ref<boolean> = ref(true);
+const showSearchProductLoading: Ref<boolean> = ref(false)
+const viewRecognitionLoading: Ref<boolean> = ref(false)
+const repaintResultSwitchMode : Ref<string> = ref('2');
+const genSceneRepaintProcessState : Ref<number> = ref(0);
+const genSceneRepaintProcessText : Ref<string> = ref('');
+const genSceneRepaintResultImgURL : Ref<string> = ref('');
+const genSceneRepaintCacheImgURL : Ref<string> = ref('');
+const container = ref(null)
+const backgroundImageDiv = ref(null)
+let perspectiveLoading = false;
+
+const galleryDialogConfig = reactive({
+    visible: false,
+    imgType: 1
+})
+
+
+const backgroundImage = reactive({
+    url: '',
+    visible: false,
+    renderWidth: 300,
+    renderHeight: 300,
+    naturalWidth: 300,
+    naturalHeight: 300
+})
+const pageConfig = reactive({
+    index: 1,
+    size: 50,
+    total: 0,
+    loading: false,
+    tips: '加载更多',
+    breakpoints: {
+        1000: { rowPerView: 5 },
+        800: { rowPerView: 4 }
+    }
+})
+
+
+// 选中产品图后，可拖拽图片属性
+const state = reactive({
+    imageLoaded: false,
+    active: false,
+    posX: 0,
+    posY: 0,
+    width: 100,
+    height: 100,
+    scale: 0.5,
+    maxWidth: 300,
+    maxHeight: 300
+})
+
+const overImage = reactive({
+    url: '',
+    visible: false,
+    renderWidth: 300,
+    renderHeight: 300,
+    naturalWidth: 300,
+    naturalHeight: 300
+})
+
+
+const list: Ref<ImageItem[]> = ref([])
+interface ImageItem {
+    code: string | null
+    image_url: string
+    preview_url: string
+    thumb_url: string | null
+}
+
+interface MainPicItem {
+    selected: boolean 
+    image_url: string
+    perspective : string | null 
+}
+
+
+
+//侧视图场景画布相关变量
+const uploadPicUrl : Ref<string | null> = ref('');//https://ecm.midea.com/appdata/ecm_aigc/static/ai_drawer_res/home_case/image-04.png
+const uploadPicMaskUrl : Ref<string | null> = ref('');
+const finalUploadPicUrl : Ref<string | null> = ref('');    
+const canvasWidthRef : Ref<number> = ref(800);
+const canvasHeightRef : Ref<number> = ref(600);
+const uploadImageWidth : Ref<number> = ref(0);
+const uploadImageHeight : Ref<number> = ref(0);
+const finalImageWidth : Ref<number> = ref(0);
+const finalImageHeight : Ref<number> = ref(0);    
+// 用于跟踪 fabric.Canvas 实例
+let canvasRef = null;
+// 画笔颜色
+const brushColor = ref('rgba(0,0,0,.8)');
+// 画笔粗细滑块显示/隐藏
+const paintBrush = ref(false);
+// 画笔粗细
+const brushNum = ref(60);
+// 当前状态为画笔/橡皮差
+const fabricStatus = ref(false);
+watch(() => uploadPicUrl.value, (newValue, oldValue) => {
+    // bottomImg.value = newValue;
+    // generateBtnDisable.value = false;    
+    const img = new Image();
+    img.src = newValue;
+
+    img.onload = function () {
+    // 动态初始化画布并添加图片
+        uploadImageWidth.value = img.width;
+        uploadImageHeight.value = img.height;
+
+        const originalWidth = img.width;
+        const originalHeight = img.height;
+
+
+        const resizedCanvas = document.getElementById('resizedCanvas');
+        const resizedCanvasCtx = resizedCanvas.getContext('2d');
+
+        // Compute scaling factor to fit the longest side to 1024
+        const maxDimension = 1024;
+        const scaleFactor = maxDimension / Math.max(originalWidth, originalHeight);
+
+        // Calculate new dimensions
+        const newWidth = originalWidth * scaleFactor;
+        const newHeight = originalHeight * scaleFactor;
+
+        // Resize canvas
+        resizedCanvas.width = newWidth;
+        resizedCanvas.height = newHeight;
+
+        // Draw resized image
+        resizedCanvasCtx.clearRect(0, 0, resizedCanvas.width, resizedCanvas.height);
+        resizedCanvasCtx.drawImage(img, 0, 0, newWidth, newHeight);
+
+        initializeCanvas(img);
+
+        if(img.width > img.height){
+            finalImageWidth.value = 1024;
+            finalImageHeight.value = 1024 * img.height / img.width;
+        }else{
+            finalImageHeight.value = 1024;
+            finalImageWidth.value = img.width * 1024 / img.height;
+        }
+
+        console.log(`finalImageWidth:${finalImageWidth.value},finalImageHeight:${finalImageHeight.value}`)
+        
+    };
+})
+
+const handleDragOver = (event: Event) => {
+  event.preventDefault()
+}
+
+
+
+onMounted(() => {
+    document.addEventListener('click', hideOverlay)
+    queryPresetSceneList('first') // 默认场景加载
+})
+
+watch(() => currentView.value, (newValue, oldValue) => {
+    console.log(newValue);
+    if(newValue !== 'unknown'){
+        if(newValue == 'front' && uploadPicUrl.value){
+            backgroundImage.url = uploadPicUrl.value;
+            uploadPicUrl.value = '';
+            dealMattingImg();
+        }else if(newValue !== 'front' && backgroundImage.url){
+            uploadPicUrl.value = backgroundImage.url;
+            backgroundImage.url = '';
+        }
+    }
+})
+
+/**
+ * 查询预置场景列表
+ */
+const queryPresetSceneList = async (type) => {
+    perspectiveLoading = true;
+    pageConfig.loading = true;
+    if(!type){
+        sceneFirstShowTips.value = false;
+    }
+    
+    list.value = []
+    const res: any = await AiPicUrlApi.getReplaceProductConfig({
+        page: pageConfig.index,
+        page_size: pageConfig.size,
+        category_id: currentCategory.value
+    })
+    if (res.errcode === 0) {
+        perspectiveLoading = false;
+        prodectType.value = res.data.try_models
+        const images: ImageItem[] =res.data.scene_images;// [];//res.data.scene_images
+        if(images.length > 0){
+            list.value = list.value.concat(images)
+            pageConfig.total = list.value.length
+            if (list.value.length > 0 && type == 'first') {
+                console.log('slkdjfklsjdf')
+                currentSelect.value = 0
+                currentSelectBg.value = list.value[0].preview_url
+                bottomImg.value = list.value[0].image_url
+            }else if(!type){
+                currentSelect.value = -1
+                currentSelectBg.value = ''
+                bottomImg.value = ''
+            }
+            setTimeout(() => {
+                pageConfig.loading = false
+                if (images.length === 0 || images.length < pageConfig.size) {
+                    pageConfig.tips = '暂无更多数据'
+                }
+            }, 1000)            
+
+        }else{
+            list.value = []
+            currentSelect.value = -1
+            currentSelectBg.value = ''
+            bottomImg.value = ''
+        }
+
+    } else {
+        list.value = []
+        currentSelect.value = -1
+        currentSelectBg.value = ''
+        bottomImg.value = ''        
+        pageConfig.total = 0
+        ElMessage.error(`[${res.errcode}]${res.errmsg}`)
+    }
+}
+
+// 测试使用的对比图
+const bottomImg = ref('') // 底图
+const upperImg = ref('') // 上层图
+const generateSceneProcessState = ref(0)
+const dialogVisible = ref(false)
+const tempIndex = ref(0)
+const tempTryCode = ref('')
+const dialogVisibleFlag = ref('')
+
+// 选中其中一个场景图片
+const selectPicture = (index: number) => {
+    if (upperImg && generateSceneProcessState.value === 3) {
+        dialogVisible.value = true
+        tempIndex.value = index
+        dialogVisibleFlag.value = 'bg'
+    } else {
+        currentSelect.value = index
+        currentSelectBg.value = list.value[index].preview_url
+        bottomImg.value = list.value[index].image_url
+        upperImg.value = ''
+    }
+}
+
+
+
+// 查看大图
+const currentPicViewList: Ref<any[]> = ref([]) // 查看大图
+import AiPicViewer from '../components/AiPicViewer.vue'
+const picViewer = reactive({
+    visible: false,
+    index: 0
+})
+const showPicture = (index: number) => {
+    picViewer.visible = true
+    picViewer.index = index
+    currentPicViewList.value = [{ ...list.value[index], url: list.value[index].image_url }]
+}
+
+// 产品搜索内容开始
+interface SearchObj {
+    productSearchField: string
+    productSearchFieldContent: string | null
+}
+const productSearchObj = reactive<SearchObj>({
+    productSearchField: 'model',
+    productSearchFieldContent: ''
+})
+const generateProcessState: Ref<number> = ref(3)
+const productSearchDisabled = ref<Boolean>(false)
+const isShowProductSearchPopup = ref<Boolean>(false)
+const isInputProduct = ref<Boolean>(false)
+const searchProductResultDiv = ref(null)
+const productListActiveIndex: Ref<number> = ref(0)
+interface ProductInfo {
+    skuId: number | null
+    entName: string | null
+    brandName: string | null
+    model: string | null
+    itemCode: string | null
+    title: string | null
+    sellingPoint: string | null
+    mainPic: string
+    categoryId: number | null
+}
+
+const productList = reactive<ProductInfo[]>([])
+const currentProduct = reactive<ProductInfo>({
+    skuId: null,
+    entName: null,
+    brandName: null,
+    model: null,
+    itemCode: null,
+    title: null,
+    sellingPoint: null,
+    mainPic: '',
+    categoryId: null
+})
+const mainProductList = ref<string[]>([])
+const allProductList = ref<string[]>([])
+const generateNum: Ref<number> = ref(0)
+
+
+const onChangeProductUploadType = ()=>{
+
+}
+
+const onChangeSceneType = ()=>{
+    if (sceneType.value == '2' && !currentProductImageURL.value) {
+        sceneType.value = '1'
+        ElMessage({
+            message: `请先选择或上传产品图片噢`,
+            type: 'warning'
+        })
+        
+        return false;
+    }
+
+    if(sceneType.value == '2'){
+        currentSelect.value = -1
+        currentSelectBg.value = ''
+        bottomImg.value = ''
+    }
+    
+}
+
+const onSelectProductViewType = ()=>{
+
+}
+
+
+/**
+ * 检索商品信息
+ */
+const onSearch = async (type: string) => {
+
+    mainPicList.value = [];
+    showSearchProductLoading.value = true;
+    productSearchDisabled.value = true
+    const productInfoResp: any = await ProductSellingWritingApi.queryProductInfo({
+        productSearchField: productSearchObj.productSearchField,
+        productSearchFieldContent: productSearchObj.productSearchFieldContent
+    })
+
+    if (productInfoResp.errcode == 0) {
+        
+        showSearchProductLoading.value = false;
+        productSearchDisabled.value = false
+        
+        if (productInfoResp.data.length) {
+            let productInfoList = productInfoResp.data;
+            Object.assign(productList, productInfoList)
+            if(productInfoResp.data.length == 1 || type == 'try'){
+                Object.assign(currentProduct, productInfoList[0])
+
+                dealImage()
+
+
+            }else{
+                isShowProductSearchPopup.value = true
+                 // 切换焦点
+                await nextTick()
+                if (searchProductResultDiv.value) {
+                    searchProductResultDiv.value.focus()
+                }                
+            }
+
+
+        } else {
+            ElMessage.error(`此型号查无数据`)
+            mainPicList.value = [];
+            mainProductList.value = []
+        }
+    } else {
+      ElMessage.error(`[${productInfoResp.errcode}]${productInfoResp.errmsg}`)
+    }
+
+}
+/**
+ * 模糊搜索列表选择产品
+ */
+const onSelectProduct = (index?: number) => {
+    productListActiveIndex.value = index
+    Object.assign(currentProduct, productList[index])
+    if (productSearchObj.productSearchField === 'model') {
+        productSearchObj.productSearchFieldContent = productList[productListActiveIndex.value].model
+    } else {
+        productSearchObj.productSearchFieldContent = productList[productListActiveIndex.value].itemCode
+    }
+    isShowProductSearchPopup.value = false
+    dealImage()
+}
+/**
+ * 模糊搜索列表上移
+ */
+const onMoveProductUp = (index) => {
+    if (productListActiveIndex.value > 0) {
+        productListActiveIndex.value--
+    }
+}
+/**
+ * 模糊搜索列表下移
+ */
+const onMoveProductDown = (index) => {
+    if (productListActiveIndex.value < productList.length - 1) {
+        productListActiveIndex.value++
+    }
+}
+
+/**
+ * 重置产品搜索字段内容
+ */
+const resetSearchFieldContent = (e?: Event) => {
+    productSearchObj.productSearchFieldContent = null
+}
+/**
+ * 处理产品图片显示
+ */
+const dealImage = () => {
+    let tempObj: any = currentProduct;
+    currentCategory.value = tempObj.categoryId;
+    if(!checkCategoryIdIsInWhiteList(currentCategory.value)){
+        currentCategoryIsInWhtieList.value = false;
+        list.value = [];
+    }else{
+        currentCategoryIsInWhtieList.value = true;
+
+    }
+    let _mainPicList = tempObj?.mainPicList;
+    if(_mainPicList){
+        mainPicList.value = [];
+        _mainPicList.forEach((item) => {
+            
+            mainPicList.value.push({
+                selected: false,
+                image_url: item,
+                perspective: null,
+            })
+        })
+    }else{
+        ElMessage({
+            message: '你选择的型号没有主图数据',
+            type: 'warning'
+        })
+    }
+
+}
+/**
+ * 选择产品图片
+ * 根据选择的产品图的视角走不同的工作流
+ */
+const onSelectProductMainPic = async(index: number)=>{
+    if(perspectiveLoading){
+        return;
+    }
+    mainPicList.value.forEach(item => {
+        item.selected = false;
+        mainPicList.value[index].selected = true;
+    });
+    currentProductImageURL.value = mainPicList.value[index].image_url;
+      
+    if(!currentCategoryIsInWhtieList.value){
+        list.value = [];
+    }
+
+    if(!mainPicList.value[index].perspective){
+        viewRecognitionLoading.value = true;
+        const detecProductPerspectiveResp: any = await AiPicUrlApi.detecProductPerspective({
+            category : currentCategory.value,
+            image_url : currentProductImageURL.value,
+            gen_seq : 0,
+        });
+        if(detecProductPerspectiveResp.errcode == 0){
+            viewRecognitionLoading.value = false;
+            let perspective = detecProductPerspectiveResp.data.perspective;
+            currentView.value = perspective;
+            mainPicList.value[index].perspective = currentView.value;
+            if(perspective == 'unknown'){
+                detectProductPerspectiveFail.value = true;
+                sceneType.value = '2';
+                list.value = [];
+                currentSelect.value = -1;
+                currentSelectBg.value = '';
+
+            }else{
+                detectProductPerspectiveFail.value = false;
+            }
+            
+            if(perspective == 'front'){
+                queryPresetSceneList();
+            }else{
+                list.value = [];
+                currentSelect.value = -1;
+                currentSelectBg.value = '';
+                sceneType.value = '2';
+            }                
+        }else{
+            viewRecognitionLoading.value = false;
+            detectProductPerspectiveFail.value = true;
+            sceneType.value = '2';
+        }
+    }else{
+        currentView.value = mainPicList.value[index].perspective;
+        if(mainPicList.value[index].perspective == 'front'){
+            queryPresetSceneList();
+        }else{
+            list.value = [];
+            currentSelect.value = -1;
+            currentSelectBg.value = '';
+            sceneType.value = '2';
+        }
+    }
+}
+
+// 合成图片后的二次点击确认切换
+const onConfirmChange = () => {
+    dialogVisible.value = false
+    generateSceneProcessState.value = 0
+    if (dialogVisibleFlag.value === 'bg') {
+        currentSelect.value = tempIndex.value
+        currentSelectBg.value = list.value[currentSelect.value].preview_url
+        bottomImg.value = list.value[currentSelect.value].image_url
+    } else if (dialogVisibleFlag.value === 'changeProduct') {
+        mainProductList.value = allProductList.value
+    } else {
+        productSearchObj.productSearchFieldContent = tempTryCode.value
+        productSearchObj.productSearchField = 'model'
+        onSearch('try')
+    }
+}
+
+const hideOverlay = () => {
+    isShowProductSearchPopup.value = false
+    productList.splice(0, productList.length)
+    productListActiveIndex.value = 0
+}
+
+
+// 点击试一试
+const clickTry = (code: string) => {
+    if (upperImg && generateSceneProcessState.value === 3) {
+        dialogVisible.value = true
+        dialogVisibleFlag.value = 'try'
+        tempTryCode.value = code
+    } else {
+        productSearchObj.productSearchFieldContent = code
+        productSearchObj.productSearchField = 'model'
+        showSearchProductLoading.value = true
+        onSearch('try')
+    }
+}
+
+
+const onChangRepaintResultSwitchMode = async()=>{
+
+}
+
+
+const onRepaint = async()=>{
+
+    // await genImage();
+    // await genMaskImage();
+    let query = {
+        image_url: uploadPicUrl.value,
+        strength: 2,
+        gen_seq: generateNum.value
+    };
+    if(uploadPicUrl.value){
+        query.image_url = genSceneRepaintCacheImgURL.value || uploadPicUrl.value;
+    }
+    if(backgroundImage.url){
+        query.image_url = genSceneRepaintCacheImgURL.value || backgroundImage.url;
+    }
+    const genSceneRepaintResp: any = await AiPicUrlApi.genSceneRepaint(query);
+    if(genSceneRepaintResp.errcode == 0){
+        let genSceneRepaintTaskId = genSceneRepaintResp.data.task_id;
+        genSceneRepaintProcessState.value = 1;
+
+		loopRequestGenerateResult(genSceneRepaintTaskId,(loopResultResp)=>{
+            if(loopResultResp.data.waiting_count){
+                genSceneRepaintProcessText.value = `排队中，前面还有${loopResultResp.data.waiting_count}个任务，请耐心等待...`;
+            }else{
+                genSceneRepaintProcessText.value = `图片正在努力重绘中，请耐心等待...`;
+            }
+        })
+		.then((resultResp) => {
+            genSceneRepaintProcessState.value = 2;
+
+            if(resultResp.errcode == 0){
+                genSceneRepaintResultImgURL.value = resultResp.data.result.images[0].url;
+                repaintResultSwitchMode.value = '1';
+                if(uploadPicUrl.value){
+                    
+                    genSceneRepaintCacheImgURL.value = uploadPicUrl.value;
+                    uploadPicUrl.value = resultResp.data.result.images[0].url;
+                    clearBrush();
+                }
+                if(backgroundImage.url){
+                    genSceneRepaintCacheImgURL.value = backgroundImage.url;
+                    backgroundImage.url = resultResp.data.result.images[0].url;
+                }
+            }
+		})
+		.catch(error => {
+			genSceneRepaintProcessState.value = 3;
+			console.error('Error:', error);
+			// let {errcode,errmsg} = error;
+			// generateFailMsg.value = `[${errcode}]${errmsg}`;
+			
+		});
+    }else{
+        ElMessage({
+            message: `[${genSceneRepaintResp.errcode}]${genSceneRepaintResp.errmsg}`,
+            type: 'error'
+        })
+
+    }
+}
+
+const onUndoRepaint = ()=>{
+    if(uploadPicUrl.value){
+        uploadPicUrl.value = genSceneRepaintCacheImgURL.value;
+    }
+    if(backgroundImage.url){
+        backgroundImage.url = genSceneRepaintCacheImgURL.value;
+    }
+    genSceneRepaintResultImgURL.value = '';
+    repaintResultSwitchMode.value = '2';
+
+}
+
+const currentGetObjectMattingTaskId: Ref<number> = ref(0)
+const downImageId: Ref<string> = ref('')
+const generateProcessText: Ref<string> = ref('')
+/**
+ * 选择的是预置场景，则调用getReplaceProduct接口
+ */
+const generatePresetScene = async()=>{
+    if(!currentProductImageURL.value){
+        ElMessage({
+            message: `请先选择产品图`,
+            type: 'warning'
+        })
+        return;
+    }
+
+    if(!currentSelectBg.value){
+        ElMessage({
+            message: `请选择预置场景图`,
+            type: 'warning'
+        })
+        return;
+    }
+    generateSceneProcessState.value = 2
+    
+    const getObjectMattingResp: any = await AiPicUrlApi.getReplaceProduct({
+        scene_code: list.value[currentSelect.value].code,
+        product_url: currentProductImageURL.value,
+        gen_seq: generateNum.value
+    })
+    if (getObjectMattingResp.errcode == 0) {
+        currentGetObjectMattingTaskId.value = getObjectMattingResp.data.task_id
+        generateNum.value += 1
+        loopRequestGenerateResult(currentGetObjectMattingTaskId.value, (loopResultResp) => {
+            if (loopResultResp.data.waiting_count) {
+                generateProcessText.value = `排队中，前面还有${loopResultResp.data.waiting_count}个任务，请耐心等待...`
+            } else {
+                generateProcessText.value = `图片正在努力生成中，请耐心等待...`
+            }
+        })
+            .then((resultResp) => {
+                generateSceneProcessState.value = resultResp.data.state
+                if (resultResp.errcode == 0 && resultResp.data.state === 3) {
+                    let maskListResp = resultResp.data.result.images[0].url
+                    upperImg.value = maskListResp
+                    downImageId.value = resultResp.data.result.images[0].id
+                } else if (resultResp.errcode == 0 && resultResp.data.state === 4) {
+                  generateSceneProcessState.value = 5
+                  generateFailMsg.value  = '生成失败，请重试'
+                }
+            })
+            .catch((error) => {
+                generateSceneProcessState.value = 5
+                console.error('Error:', error)
+                generateFailMsg.value  = error.errmsg
+            })
+    } else {
+        generateSceneProcessState.value = 5
+        generateFailMsg.value  = `${getObjectMattingResp.errmsg}`
+    }
+}
+
+
+/**
+ * 点击立即生成按钮，根据场景类型，调用不同的生成接口
+ * 如果是预置场景，则走generatePresetScene
+ * 如果是自定义场景，则走generateCustomScene
+ */
+const onGenerate = async () => {
+    if(sceneType.value == '1'){
+        generatePresetScene();
+    }
+
+    if(sceneType.value == '2'){
+        generateCustomScene();
+    }
+}
+/**
+ * 上传自定义场景的生成分支
+ * 如果选择的产品图是正视图，则调用genReplaceProductCustomFront
+ * 如果选择的产品图是侧视图，则调用genReplaceProductCustomSide
+ */
+const generateCustomScene = async()=>{
+    if(!currentProductImageURL.value){
+        ElMessage({
+            message: `请先选择或上传产品图`,
+            type: 'warning'
+        })
+        return;
+    }
+    if(currentView.value == 'front'){
+        if(!backgroundImage.url){
+            ElMessage({
+                message: `请先上传场景图`,
+                type: 'warning'
+            })
+            return;
+        }
+        generateSceneProcessState.value = 2
+
+        bottomImg.value = backgroundImage.url;
+
+        let params = {
+            scene_url: backgroundImage.url,
+            product_url: overImage.url,
+            product_rect: getModelRect(),
+            gen_seq: generateNum.value
+        }
+        const genReplaceProductCustomFrontResp:any = await AiPicUrlApi.genReplaceProductCustomFront(params);
+
+        if (genReplaceProductCustomFrontResp.errcode == 0) {
+            let taskId = genReplaceProductCustomFrontResp.data.task_id
+            generateNum.value += 1
+            loopRequestGenerateResult(taskId, (loopResultResp) => {
+                if (loopResultResp.data.waiting_count) {
+                    generateProcessText.value = `排队中，前面还有${loopResultResp.data.waiting_count}个任务，请耐心等待...`
+                } else {
+                    generateProcessText.value = `图片正在努力生成中，请耐心等待...`
+                }
+            })
+            .then((resultResp) => {
+                generateSceneProcessState.value = resultResp.data.state
+                if (resultResp.errcode == 0 && resultResp.data.state === 3) {
+                    let maskListResp = resultResp.data.result.images[0].url
+                    upperImg.value = maskListResp
+                    downImageId.value = resultResp.data.result.images[0].id
+                } else if (resultResp.errcode == 0 && resultResp.data.state === 4) {
+                    generateSceneProcessState.value = 5
+                    generateFailMsg.value  = '生成失败，请重试'
+                }
+            })
+            .catch((error) => {
+                generateSceneProcessState.value = 5
+                console.error('Error:', error)
+                generateFailMsg.value  = error.errmsg
+            })
+        } else {
+            generateSceneProcessState.value = 5
+            generateFailMsg.value  = `${genReplaceProductCustomFrontResp.errmsg}`
+        }        
+    }else if(currentView.value !== 'front'){
+        if(!uploadPicUrl.value){
+            ElMessage({
+                message: `请先上传场景图`,
+                type: 'warning'
+            })
+            return;
+        }
+        generateSceneProcessState.value = 2
+        bottomImg.value = uploadPicUrl.value;
+
+        await genImage();
+        await genMaskImage();
+        let params = {
+            scene_url: finalUploadPicUrl.value,
+            mask_url: uploadPicMaskUrl.value,
+            product_url: currentProductImageURL.value,
+            gen_seq: generateNum.value
+        }
+        const genReplaceProductCustomSideResp:any = await AiPicUrlApi.genReplaceProductCustomSide(params);
+        if (genReplaceProductCustomSideResp.errcode == 0) {
+            let taskId = genReplaceProductCustomSideResp.data.task_id
+            generateNum.value += 1
+            loopRequestGenerateResult(taskId, (loopResultResp) => {
+                if (loopResultResp.data.waiting_count) {
+                    generateProcessText.value = `排队中，前面还有${loopResultResp.data.waiting_count}个任务，请耐心等待...`
+                } else {
+                    generateProcessText.value = `图片正在努力生成中，请耐心等待...`
+                }
+            })
+            .then((resultResp) => {
+                generateSceneProcessState.value = resultResp.data.state
+                if (resultResp.errcode == 0 && resultResp.data.state === 3) {
+                    let maskListResp = resultResp.data.result.images[0].url
+                    upperImg.value = maskListResp
+                    downImageId.value = resultResp.data.result.images[0].id
+                } else if (resultResp.errcode == 0 && resultResp.data.state === 4) {
+                    generateSceneProcessState.value = 5
+                    generateFailMsg.value  = '生成失败，请重试'
+                }
+            })
+            .catch((error) => {
+                generateSceneProcessState.value = 5
+                console.error('Error:', error)
+                generateFailMsg.value  = error.errmsg
+            })
+        } else {
+            generateSceneProcessState.value = 5
+            generateFailMsg.value  = `${genReplaceProductCustomSideResp.errmsg}`
+        }
+    }
+}
+
+
+
+
+/*  Start - 选择社区/我的图片 - Start */
+
+const showGalleryDialog = (type) => {
+    if (type === 2 && !backgroundImage.visible) {
+        ElMessage({
+            message: '请先选择场景图',
+            type: 'error'
+        })
+        return
+    }
+    galleryDialogConfig.imgType = type
+    galleryDialogConfig.visible = true
+}
+
+const closeOrConfirmDialog = (imgURL) => {
+    if (imgURL) {
+        if (galleryDialogConfig.imgType === 1) {
+            // 场景图
+            genSceneRepaintCacheImgURL.value = '';
+            if(!currentView.value || currentView.value == 'unknown'){
+                ElMessage({
+                    message: `请先确定产品图视角`,
+                    type: 'error'
+                })
+                return false;
+            }
+            if(currentView.value == 'front'){
+                backgroundImage.url = imgURL;
+                dealMattingImg();
+            }else{
+                uploadPicUrl.value = imgURL;
+            }
+        } 
+        backgroundImage.visible = true
+    }
+    galleryDialogConfig.visible = false
+}
+/*  End - 选择社区/我的图片 - End */
+
+
+
+/**
+ * 手动上传产品图
+ */
+const onUploadProductPicSuccess: UploadProps['onSuccess'] = (response, uploadFile) => {
+    if (response.errcode == 0) {
+        customUploadProductPic.value = response.data.url;
+        currentProductImageURL.value = customUploadProductPic.value;
+        list.value = [];
+        currentSelect.value = -1;
+        currentSelectBg.value = '';
+        sceneType.value = '2';
+
+    }
+}
+
+/**
+ * 手动上传场景图
+ */
+const onUploadSuccess: UploadProps['onSuccess'] = (response, uploadFile) => {
+    if (response.errcode == 0) {
+        genSceneRepaintCacheImgURL.value = '';
+        if(!currentView.value || currentView.value == 'unknown'){
+            ElMessage({
+                message: `请先确定产品图视角`,
+                type: 'error'
+            })
+            return false;
+        }
+        if(currentView.value == 'front'){
+            backgroundImage.url = response.data.url;
+            dealMattingImg();
+        }else{
+            uploadPicUrl.value = response.data.url;
+        }
+
+    }
+}
+
+// 拿产品去抠图放置在场景图上方以便产品图可以在场景图上方拖拽移动
+const dealMattingImg = async () => {
+    let params = {
+        product_url: currentProductImageURL.value
+    }
+    const getObjectMattingResp: any = await AiPicUrlApi.genProductMatting(params)
+    if (getObjectMattingResp.errcode == 0) {
+        currentProductImageMattingURL.value = getObjectMattingResp.data.image_url;
+        getAndSetOverImage(currentProductImageMattingURL.value)
+    }
+}
+
+
+// 获取裁切后的产品图的大小
+const getAndSetOverImage = (src) => {
+    state.imageLoaded = false
+    state.scale = 0.5
+    const loading = ElLoading.service({
+        lock: true,
+        text: '图片加载中...',
+        background: 'rgba(0, 0, 0, 0.7)'
+    })
+    loadImage(src).then((img) => {
+        // 处理最大宽高，避免超出背景图
+        if (img.height * state.scale > backgroundImage.renderHeight) {
+            state.scale = (backgroundImage.renderHeight / img.height) * 0.6
+        }
+        state.width = img.width * state.scale
+        state.height = img.height * state.scale
+        state.posX = 0
+        state.posY = 0
+        state.imageLoaded = true
+
+        overImage.renderWidth = state.width
+        overImage.renderHeight = state.height
+        overImage.naturalWidth = img.naturalWidth
+        overImage.naturalHeight = img.naturalHeight
+        overImage.url = src
+        overImage.visible = true
+        loading.close()
+    })
+}
+
+watch(
+    () => backgroundImageDiv.value,
+    (bgImg) => {
+        if (bgImg) {
+            bgImg.onload = () => {
+                backgroundImage.renderWidth = bgImg.width
+                backgroundImage.renderHeight = bgImg.height
+                backgroundImage.naturalWidth = bgImg.naturalWidth
+                backgroundImage.naturalHeight = bgImg.naturalHeight
+                container.value.style.width = `${bgImg.width}px`
+                container.value.style.height = `${bgImg.height}px`
+                state.posX = 0
+                state.posY = 0
+            }
+        }
+    }
+)
+// 计算融合比例
+const getModelRect = () => {
+    const bgWidthRatio = backgroundImage.naturalWidth / backgroundImage.renderWidth
+    const personHeight = state.height * bgWidthRatio,
+        personWidth = state.width * bgWidthRatio
+    let posY = state.posY * bgWidthRatio,
+        posX = state.posX * bgWidthRatio
+    return {
+        x: posX,
+        y: posY,
+        w: personWidth,
+        h: personHeight
+    }
+}
+
+// 下载
+const onDownLoad = async () => {
+    const downloadImageResp: any = await AiPicUrlApi.downloadImage({
+        source: currentSource.value,
+        image_ids: [downImageId.value]
+    })
+    if (downloadImageResp.errcode === 0) {
+        if (downloadImageResp.data.url.indexOf('zip') == -1) {
+            downloadImage(downloadImageResp.data.url, `image_${downImageId.value}`)
+        } else {
+            window.open(downloadImageResp.data.url)
+        }
+    } else {
+        ElMessage({
+            message: `下载失败，[${downloadImageResp.errcode}]${downloadImageResp.errmsg}`,
+            type: 'warning'
+        })
+    }
+}
+
+// 点击保存到我的
+const onSave = async () => {
+    const saveToMineResp = await AiPicUrlApi.saveToMine({
+        source: currentSource.value,
+        image_ids: [downImageId.value]
+    })
+    if (saveToMineResp.errcode == 0) {
+        ElMessage({
+            message: '保存成功',
+            type: 'success'
+        })
+    } else {
+        ElMessage({
+            message: `保存失败，[${saveToMineResp.errcode}]${saveToMineResp.errmsg}`,
+            type: 'warning'
+        })
+    }
+}
+
+
+
+
+
+
+/*  Start - 画布编辑 - Start */
+
+// 初始化画布（只在需要时创建）
+const initializeCanvas = (img: HTMLImageElement) => {
+
+  // 检查是否已有画布实例，避免重复创建
+  if (!canvasRef) {
+    const canvasElement = document.querySelector("#canvas");
+    if (!canvasElement) {
+      console.error("Canvas element not found");
+      return;
+    }
+
+    // 创建新的 fabric.Canvas 实例
+    canvasRef = new fabric.Canvas(canvasElement, {
+      //selection: false,
+      isDrawingMode: false,
+      devicePixelRatio: true,
+    });
+  }
+  console.log(img.src);
+
+  // 清空画布内容
+  canvasRef.clear();
+
+  // 创建并添加图片到画布
+  fabric.Image.fromURL(img.src, (fabricImg) => {
+    // 设置图片的缩放比例和位置
+    fabricImg.set({
+      left: 0,
+      top: 0,
+      scaleX: canvasRef.width / img.width,
+      scaleY: canvasRef.height / img.height,
+      selectable: false, // 禁止选择背景图
+      evented: false, // 禁止背景图响应事件      
+    });
+
+    // 将图片添加到画布
+    canvasRef.add(fabricImg);
+
+    canvasRef.renderAll();
+    customizeControls();
+  });
+
+  // 动态调整画布大小
+  resizeCanvasAndImage(img);
+  enableRectMode();
+
+};
+    // 移除旋转控制点
+    const removeRotationControls = () => {
+      // 隐藏旋转控制点（mtr）
+      fabric.Object.prototype.controls.mtr.visible = false;
+
+      // 禁用旋转功能
+      fabric.Object.prototype.hasRotatingPoint = false;
+    };
+    // 自定义控制点样式
+    const customizeControls = () => {
+      const controlProperties = {
+        size: 8, // 控制点大小
+        fill: 'rgb(121.3,187.1,255)', // 控制点填充颜色
+        stroke: 'white', // 控制点边框颜色
+        strokeWidth: 1, // 控制点边框宽度
+        cornerStyle: 'circle', // 控制点形状（circle 或 rect）
+      };
+
+      // 定义控制点的渲染逻辑
+      const renderControl = (ctx, left, top, styleOverride, fabricObject) => {
+        const size = styleOverride.cornerSize || controlProperties.size;
+        ctx.save();
+        ctx.fillStyle = styleOverride.cornerColor || controlProperties.fill;
+        ctx.strokeStyle = controlProperties.stroke;
+        ctx.lineWidth = controlProperties.strokeWidth;
+        ctx.beginPath();
+        if (styleOverride.cornerStyle === 'circle') {
+          ctx.arc(left, top, size / 2, 0, 2 * Math.PI, false);
+        } else {
+          ctx.rect(left - size / 2, top - size / 2, size, size);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      };
+      removeRotationControls();
+
+      // 修改默认控制点
+      Object.values(fabric.Object.prototype.controls).forEach((control) => {
+        control.render = renderControl;
+        control.cornerSize = controlProperties.size;
+        control.cornerColor = controlProperties.fill;
+        control.cornerStyle = controlProperties.cornerStyle;
+      });
+    };
+
+let isDrawing = false; // 是否正在绘制矩形
+    let startPoint = null; // 矩形起始点
+    let rect = null; // 矩形对象
+const enableRectMode = ()=>{
+     // 监听鼠标按下事件
+     canvasRef.on('mouse:down', (options) => {
+        if (options.target) return; // 如果点击的是已有对象（如矩形），则不绘制新矩形
+        isDrawing = true;
+        const pointer = canvasRef.getPointer(options.e);
+        startPoint = { x: pointer.x, y: pointer.y };
+
+        // 创建矩形对象
+        rect = new fabric.Rect({
+          left: startPoint.x,
+          top: startPoint.y,
+          width: 0,
+          height: 0,
+          fill: 'rgba(0,0,0,.5)', // 半透明红色
+          stroke: 'rgba(0,0,0,.5)',
+          strokeWidth: 1,
+          selectable: true, // 允许选中
+          hasControls: true, // 显示控制点（默认值）
+          hasBorders: false, // 显示边框（默认值）
+          hasRotatingPoint:false
+        });
+        canvasRef.add(rect);
+      });
+
+      // 监听鼠标移动事件
+      canvasRef.on('mouse:move', (options) => {
+        if (!isDrawing) return;
+        const pointer = canvasRef.getPointer(options.e);
+
+        // 更新矩形的宽度和高度
+        rect.set({
+          width: Math.abs(pointer.x - startPoint.x),
+          height: Math.abs(pointer.y - startPoint.y),
+        });
+
+        // 调整矩形的起始点
+        if (pointer.x < startPoint.x) {
+          rect.set({ left: pointer.x });
+        }
+        if (pointer.y < startPoint.y) {
+          rect.set({ top: pointer.y });
+        }
+
+        canvasRef.renderAll(); // 重新渲染画布
+      });
+
+      // 监听鼠标释放事件
+      canvasRef.on('mouse:up', () => {
+        isDrawing = false;
+      });
+    
+}
+
+// 动态调整画布大小
+const resizeCanvasAndImage = (img: HTMLImageElement) => {
+  const container = document.getElementById("canvasBox");
+  if (!container || !canvasRef) return;
+
+  const containerWidth = container.clientWidth;
+  const imageAspectRatio = img.height / img.width;
+  const canvasWidth = containerWidth;
+  const canvasHeight = canvasWidth * imageAspectRatio;
+  canvasWidthRef.value = canvasWidth;
+  canvasHeightRef.value = canvasHeight;
+
+  // 设置画布的宽高
+  canvasRef.setWidth(canvasWidth);
+  canvasRef.setHeight(canvasHeight);
+  canvasRef.freeDrawingBrush.color = brushColor.value; // 使用画笔
+  canvasRef.freeDrawingBrush.width = brushNum.value; // 设置画笔粗细
+};
+
+const onChangBrushType = ()=>{
+    if(brushType.value == '1'){
+        canvasRef.isDrawingMode = false;
+        enableRectMode();     
+    }
+    if(brushType.value == '2'){
+        canvasRef.isDrawingMode = true; // 启用自由绘图模式
+        canvasRef.off('mouse:down'); // 移除矩形模式的鼠标事件监听器
+        canvasRef.off('mouse:move');
+        canvasRef.off('mouse:up');
+    }
+}
+
+
+// 修改画笔粗细
+const changeBrushNum = () => {
+  canvasRef.freeDrawingBrush.width = brushNum.value; // 设置画笔粗细为 10
+  //changeAction(fabricStatus.value ? 'erase' : 'undoErasing');
+};
+
+
+const clearBrush = ()=>{
+        // 获取所有对象
+    canvasRef.getObjects().forEach(function(obj) {
+        // 判断对象类型是否为 fabric.Rect
+        if (obj instanceof fabric.Rect) {
+            canvasRef.remove(obj); // 删除矩形对象
+        }
+        if (obj instanceof fabric.Path) {
+            canvasRef.remove(obj); // 删除路径对象
+        }        
+    });
+}
+
+
+
+/**
+ * 生成画布图片
+ */
+const genImage = async()=>{
+    return new Promise(async(resolve) => {
+
+
+
+        document.querySelector('#resizedCanvas').toBlob(async(blob) => {
+                // 创建 FormData 对象
+            const formData = new FormData();
+
+            // 添加 Blob 数据到 FormData
+            formData.append('file', blob, 'canvas-bg-image.png'); // 文件名可以自定义
+
+
+            const uploadMaskResp = await AiPicUrlApi.uploadImage(formData)
+            if (uploadMaskResp.errcode == 0) {
+                finalUploadPicUrl.value = uploadMaskResp.data.url;
+                resolve();
+            } else {
+
+            }            
+            
+        },'image/png');
+    })
+
+}
+/**
+ * 生成蒙版图片
+ */
+const genMaskImage = async()=>{
+    return new Promise(async(resolve) => {
+
+        // 新 canvas
+        const brushCanvas = new fabric.Canvas('brushCanvas');
+        // 设置新 canvas 的尺寸（如 2000px 宽，800px 高）
+        const newWidth = finalImageWidth.value;
+        const newHeight = finalImageHeight.value;
+        // 调用复制方法
+        //copyPathsTobrushCanvas(canvasRef, brushCanvas, newWidth, newHeight);
+
+        await copyCanvasUsingJSON(canvasRef, brushCanvas, newWidth, newHeight);
+
+
+        document.querySelector('#brushCanvas').toBlob(async(blob) => {
+                // 创建 FormData 对象
+            const formData = new FormData();
+
+            // 添加 Blob 数据到 FormData
+            formData.append('file', blob, 'canvas-image.png'); // 文件名可以自定义
+
+
+            const uploadMaskResp = await AiPicUrlApi.uploadImage(formData)
+            if (uploadMaskResp.errcode == 0) {
+                uploadPicMaskUrl.value = uploadMaskResp.data.url;
+                resolve();
+            } else {
+
+            }            
+            
+        },'image/png');
+    })
+}
+
+
+/**
+ *  把画布上的路径复制到新画布（还原原图大小的画布）上
+ */
+async function copyCanvasUsingJSON(originalCanvas, newCanvas, newWidth, newHeight) {
+  const originalWidth = originalCanvas.width;
+  const originalHeight = originalCanvas.height;
+
+  // 计算统一的缩放比例
+  const scale = Math.min(newWidth / originalWidth, newHeight / originalHeight);
+
+  // 导出 JSON 数据
+  const jsonData = originalCanvas.toJSON();
+
+  // 设置新 Canvas 尺寸
+  console.log('window.devicePixelRatio',window.devicePixelRatio);
+  const ratio = window.devicePixelRatio || 1; // 获取设备像素比
+  newCanvas.setWidth(newWidth / ratio);
+  newCanvas.setHeight(newHeight / ratio);
+  newCanvas.getElement().style.width = `${newWidth}px`;
+  newCanvas.getElement().style.height = `${newHeight}px`;
+
+
+  // 加载 JSON 数据
+  await new Promise((resolve) => {
+    newCanvas.loadFromJSON(jsonData, () => {
+      // 调整对象比例
+      newCanvas.getObjects().forEach((obj) => {
+        if (obj.type === 'image') {
+            // 删除图片对象
+            newCanvas.remove(obj);
+        }        
+        obj.scaleX *= scale / ratio;
+        obj.scaleY *= scale / ratio;
+        obj.left *= scale / ratio;
+        obj.top *= scale / ratio;
+        if (obj.type === 'path' || obj.type === 'rect') {
+            obj.set({
+                stroke: 'white',
+                fill: 'white',
+            });
+        }        
+        obj.setCoords(); // 更新边界
+      });
+
+      // 设置背景为黑色
+      newCanvas.backgroundColor = 'black';
+
+      // 渲染 Canvas
+      newCanvas.renderAll();
+
+      resolve();
+    });
+  });
+}
+
+/*  End - 画布编辑 - End */
+
+
+const checkCategoryIdIsInWhiteList = (id)=>{
+  const whiteListIds = categoryWhiteList.map(item => item.id);
+  if (!whiteListIds.includes(id)) {
+    return false;
+  }
+  return true;
+}
+</script>
