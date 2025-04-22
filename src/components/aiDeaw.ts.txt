@@ -1,0 +1,558 @@
+import AiDrawService from '@api/backend/AiDrawService'
+// import FileService from '@api/ibos/FileService';
+import { useMessageBox } from '@hooks/useMessage'
+import { useRouteParams } from '@vueuse/router'
+import { cloneDeep } from 'lodash-es'
+import { defineStore } from 'pinia'
+import {
+  CreateRecordParams,
+  DrawImageMaterial,
+  GenImageData,
+  GenImageParams,
+  PreviewImgResp,
+} from '@/types/service/api/backend/AiDrawServiceTypes'
+import { _Image } from '@/types/service/model/image'
+import { GENERATE_STATUS } from './materialEditorStore'
+import { loopRequestGenerateResult } from '../utilities'
+import { useProductStore } from './productStore'
+import { ref } from 'vue'
+
+export interface IAiDrawingStore {
+  userStore: ReturnType<typeof useUserStore>
+  materialId: Ref<string>
+  /** 是否显示保存场景页面 */
+  showSavedScene: Ref<boolean>
+  /** 场景图类型 */
+  sceneImageType: Ref<'creativeBuild' | 'customizeBuild' | 'fixedSceneBuild'>
+  /* 线稿 */
+  lineDrawImage: Ref<DrawImageMaterial>
+  /* 场景 */
+  sceneStyleImage: Ref<DrawImageMaterial>
+  /* 线稿样式提示词(仅显示) */
+  linePrompt: Ref<DrawImageMaterial>
+  /* 光线 */
+  lightEffect: Ref<DrawImageMaterial>
+  /* 颜色 */
+  colorEffect: Ref<DrawImageMaterial>
+  /** 产品 */
+  product: Ref<_Image>
+  /** 人物 */
+  character: Ref<_Image>
+  /** 画布缩放大小 */
+  sceneGrabbingScale: Ref<number>
+  /** 融合图画布缩放大小 */
+  combineGrabbingScale: Ref<number>
+  /** 生成场景图状态 */
+  sceneState: Ref<GENERATE_STATUS>
+  /** 生成融合图状态 */
+  combineState: Ref<GENERATE_STATUS>
+  /** 记录copyId */
+  recordCopyId: Ref<number>
+  hasClickStart: Ref<boolean>
+  sceneImageData: Ref<GenImageData[]>
+  combineImageData: Ref<GenImageData[]>
+  combineImageId: Ref<number>
+
+  /** 使用的场景图 */
+  useSceneImage: Ref<GenImageData>
+
+  /** 画图物品摆放位置 */
+  imagePosition: Ref<{
+    product: string
+    character: string
+  }>
+  /** 画图物品摆放位置历史记录 */
+  imagePositionHistory: ReturnType<typeof useRefHistory>
+  aiParamsHistory: Map<keyof typeof this.imagePosition, any[]>
+
+  requestController: AbortController
+  aiDrawingEventConfirm: Ref<(data: any) => void>
+  useDelete?: Ref<boolean>
+
+  confirmReplaceImage: (imgUrl: string) => void
+  cancelRequest: () => void
+  reset: () => void
+}
+
+class AiDrawingStore implements IAiDrawingStore {
+  // userStore = useUserStore();
+  materialId = useRouteParams<string>('materialId')
+  showSavedScene = ref(false)
+  sceneImageType = ref<'creativeBuild' | 'customizeBuild' | 'fixedSceneBuild'>('creativeBuild')
+  lineDrawImage = ref<DrawImageMaterial>({
+    category_id: 0,
+    change_date: '',
+    create_date: '',
+    file_path: '',
+    id: 0,
+    is_deleted: 0,
+    last_change_by: '',
+    name: '',
+    owner: '',
+    thumbnail: '',
+  })
+  sceneStyleImage = ref<DrawImageMaterial>({
+    category_id: 0,
+    change_date: '',
+    create_date: '',
+    file_path: '',
+    id: 0,
+    is_deleted: 0,
+    last_change_by: '',
+    name: '',
+    owner: '',
+    thumbnail: '',
+  })
+  linePrompt = ref<DrawImageMaterial>({
+    category_id: 0,
+    change_date: '',
+    create_date: '',
+    file_path: '',
+    id: 0,
+    is_deleted: 0,
+    last_change_by: '',
+    name: '',
+    owner: '',
+    thumbnail: '',
+  })
+  lightEffect = ref<DrawImageMaterial>({
+    category_id: 0,
+    change_date: '',
+    create_date: '',
+    file_path: '',
+    id: 0,
+    is_deleted: 0,
+    last_change_by: '',
+    name: '',
+    owner: '',
+    thumbnail: '',
+  })
+  colorEffect = ref<DrawImageMaterial>({
+    category_id: 0,
+    change_date: '',
+    create_date: '',
+    file_path: '',
+    id: 0,
+    is_deleted: 0,
+    last_change_by: '',
+    name: '',
+    owner: '',
+    thumbnail: '',
+  })
+  product = ref<_Image>({
+    file_path: '',
+    file_url: '',
+    id: 0,
+    is_delete: 0,
+  })
+  character = ref<_Image>({
+    file_path: '',
+    file_url: '',
+    id: 0,
+    is_delete: 0,
+  })
+  sceneGrabbingScale = ref(100)
+  combineGrabbingScale = ref(100)
+  useSceneImage = ref<GenImageData>()
+
+  imagePosition = ref({
+    product: '',
+    character: '',
+  })
+  imagePositionHistory = useRefHistory(this.imagePosition, {
+    deep: true,
+    capacity: 50,
+  })
+  aiParamsHistory = new Map()
+
+  sceneState = ref(GENERATE_STATUS.Incomplete)
+  combineState = ref(GENERATE_STATUS.Incomplete)
+  generateText = ref('图片生成中...')
+  recordCopyId = ref(0)
+
+  hasClickStart = ref(false)
+  sceneImageData = ref<GenImageData[]>([])
+  combineImageData = ref<GenImageData[]>([])
+  combineImageId = ref<number>()
+
+  requestController: AbortController
+  aiDrawingEventConfirm = ref<(data: any) => void>()
+  // 记录场景生成参数
+  requesParamsCache = ref<Record<string, any>>({})
+  taskId: number
+  recordSceneGenParams = ref<CreateRecordParams['param_info']>({})
+  cancelRequest = async () => {
+    const result = await AiDrawService.cancelTask({
+      task_id: this.taskId,
+    }).catch((error) => {
+      // if (error.name === 'CanceledError') return;
+
+      console.error(error)
+    })
+    console.log(result)
+    if (result && result.errcode === 0) {
+      this.combineState.value = GENERATE_STATUS.Incomplete
+    } else {
+      console.log('取消失败')
+    }
+  }
+  reset = () => {
+    const defaultValue = {
+      category_id: 0,
+      change_date: '',
+      create_date: '',
+      file_path: '',
+      id: 0,
+      is_deleted: 0,
+      last_change_by: '',
+      name: '',
+      owner: '',
+      thumbnail: '',
+    }
+
+    Object.assign(this.lineDrawImage.value, defaultValue)
+    Object.assign(this.sceneStyleImage.value, defaultValue)
+    Object.assign(this.lightEffect.value, defaultValue)
+    Object.assign(this.colorEffect.value, defaultValue)
+    this.product.value.material_name = ''
+    this.product.value.file_url = null
+    this.character.value.material_name = ''
+    this.character.value.file_url = null
+    this.sceneGrabbingScale.value = 31
+    this.sceneState.value = GENERATE_STATUS.Incomplete
+    this.combineState.value = GENERATE_STATUS.Incomplete
+    this.sceneImageData.value = []
+    this.combineImageData.value = []
+  }
+  confirmReplaceImage = (imgUrl: string) => {
+    this.aiDrawingEventConfirm.value(imgUrl)
+  }
+
+  resetState = async () => {
+    if (this.combineState.value === GENERATE_STATUS.Generating) {
+      await this.cancelRequest()
+    } else {
+      this.combineState.value = GENERATE_STATUS.Incomplete
+    }
+  }
+  queryTaskResult = (taskId) => {
+    loopRequestGenerateResult(taskId, (loopResultResp) => {
+      if (loopResultResp.data && loopResultResp.data.waiting_count) {
+        const waitSecs = loopResultResp.data.waiting_secs
+        const waitTime = waitSecs < 60 ? `${waitSecs}秒` : `${Math.round(waitSecs / 60)}分钟`
+        this.generateText.value = `系统正在生成图片，当前排队${loopResultResp.data.waiting_count}位` //，预计等待${waitTime}
+      } else {
+        this.generateText.value = '图片生成中...'
+      }
+      console.log('loopResultResp', loopResultResp)
+    })
+      .then((resultResp) => {
+        console.log('当前生成场景图', resultResp.data.result.images)
+        console.log('当前已有融合图', this.combineImageData.value)
+        this.combineImageData.value.unshift(...(resultResp.data.result.images || []))
+        console.log('所有融合图', this.combineImageData.value)
+        this.combineState.value = GENERATE_STATUS.Completed
+      })
+      .catch((error) => {
+        console.error('Error:', error)
+        if (error.errcode !== 5) {
+          useMessageBox({
+            message: `${error.errmsg || '系统繁忙，请稍后再试'}`,
+            showCancelButton: false,
+            confirmButtonText: 'OK',
+          })
+        }
+        this.combineState.value = GENERATE_STATUS.Incomplete
+      })
+  }
+}
+
+export const useImageGeneratePanelPageStore = () =>
+  defineStore(`ImageGeneratePanelPageStore`, () => {
+    const activeTab = ref<'creativeBuild' | 'customizeBuild' | 'fixedSceneBuild'>('creativeBuild')
+
+    return {
+      activeTab,
+    }
+  })()
+
+/* AI 创意生图 */
+class ImageGenerateStore extends AiDrawingStore {
+  useDelete = ref(false)
+
+  genSceneImage = async (data) => {
+    this.sceneState.value = GENERATE_STATUS.Generating
+    try {
+      const result = await AiDrawService.genSceneImage(data).catch((error) => {
+        // if (error.name === 'CanceledError') return;
+
+        console.error(error)
+      })
+      console.log(result)
+      if (result && result.errcode === 0) {
+        this.taskId = result.data.task_id
+        this.querySceneTaskResult(this.taskId)
+      } else {
+        useMessageBox({
+          message: `${result.errmsg || '系统繁忙，请稍后再试'}`,
+          showCancelButton: false,
+          confirmButtonText: 'OK',
+        })
+        this.sceneState.value = GENERATE_STATUS.Incomplete
+      }
+    } catch (e) {
+      useMessageBox({
+        message: '网络繁忙，请稍后再试',
+        showCancelButton: false,
+        confirmButtonText: 'OK',
+      })
+      this.sceneState.value = GENERATE_STATUS.Incomplete
+    }
+  }
+  genCombineImage = async (data) => {
+    this.combineState.value = GENERATE_STATUS.Generating
+
+    console.log(this.imagePosition.value.product)
+    const { top, left, width, height, scaleX, scaleY } = JSON.parse(
+      this.imagePosition.value.product || {},
+    )
+    console.log(top, left, width, height, scaleX, scaleY)
+    if (!top || !left || !width || !height || !scaleX || !scaleY) {
+      setTimeout(() => {
+        this.genImage(data, JSON.parse(this.imagePosition.value.product))
+      }, 2000)
+    } else {
+      this.genImage(data, { top, left, width, height, scaleX, scaleY })
+    }
+  }
+
+  genImage = async (data, { top, left, width, height, scaleX, scaleY }) => {
+    try {
+      const result = await AiDrawService.genCreativeBuildImage({
+        product: data.product,
+        product_url: data.product_url,
+        material_id: data.material_id,
+        scene_url: this.useSceneImage.value,
+        output_size: data.output_size,
+        product_x: left,
+        product_y: top,
+        product_w: width * (scaleX || 1),
+        product_h: height * (scaleY || 1),
+      }).catch((error) => {
+        // if (error.name === 'CanceledError') return;
+
+        console.error(error)
+      })
+      console.log(result)
+      if (result && result.errcode === 0) {
+        this.taskId = result.data.task_id
+        this.queryTaskResult(this.taskId)
+      } else {
+        useMessageBox({
+          message: `${result.errmsg || '系统繁忙，请稍后再试'}`,
+          showCancelButton: false,
+          confirmButtonText: 'OK',
+        })
+        this.combineState.value = GENERATE_STATUS.Incomplete
+      }
+    } catch (e) {
+      console.log(e)
+      useMessageBox({
+        message: '网络繁忙，请稍后再试',
+        showCancelButton: false,
+        confirmButtonText: 'OK',
+      })
+      this.combineState.value = GENERATE_STATUS.Incomplete
+    }
+  }
+
+  querySceneTaskResult = (taskId) => {
+    loopRequestGenerateResult(taskId, (loopResultResp) => {
+      if (loopResultResp.data && loopResultResp.data.waiting_count) {
+        const waitSecs = loopResultResp.data.waiting_secs
+        this.generateText.value = `系统正在生成场景图，当前排队${loopResultResp.data.waiting_count}位` //，预计等待${waitTime}
+      } else {
+        this.generateText.value = '场景图生成中...'
+      }
+      console.log('loopResultResp', loopResultResp)
+    })
+      .then((resultResp) => {
+        console.log('当前生成场景图', resultResp.data.result.images)
+        console.log('当前已有场景图', this.sceneImageData.value)
+        const images = resultResp.data.result.images.map((item) => ({
+          ...item,
+          thumb_url: item.thumb_url.replace('http://10.133.145.127:9982', ''),
+          url: item.url.replace('http://10.133.145.127:9982', ''),
+        }))
+        // TODO 记录结果
+        
+        this.sceneImageData.value.unshift(...(images || []))
+        console.log('所有场景图', this.sceneImageData.value)
+        this.sceneState.value = GENERATE_STATUS.Completed
+      })
+      .catch((error) => {
+        console.error('Error:', error)
+        if (error.errcode !== 5) {
+          useMessageBox({
+            message: `${error.errmsg || '系统繁忙，请稍后再试'}`,
+            showCancelButton: false,
+            confirmButtonText: 'OK',
+          })
+        }
+        this.sceneState.value = GENERATE_STATUS.Incomplete
+      })
+  }
+}
+
+/* AI 固定场景生图 */
+class FixedImageGenerateStore extends AiDrawingStore {
+  useDelete = ref(true)
+  sceneImageType = ref('fixedSceneBuild')
+
+  resetSceneImage = (item) => {
+    this.sceneState.value = GENERATE_STATUS.Completed
+    const { url, material_id, product_x, product_y, product_w, product_h } = item
+
+    const productStore = useProductStore()
+    //const productImageUrl = productStore.currentProductImage.imageUrl
+    console.log('接口返回的场景图里的产品的坐标', {
+      product_x,
+      product_y,
+      product_w,
+      product_h,
+    })
+    const productImageWidth = productStore.currentProductImage.mattingWidth
+    const productImageHeight = productStore.currentProductImage.mattingHeight
+    // 创建图片对象并加载图片以获取实际尺寸
+    console.log('productImageWidth', productImageWidth, productImageHeight)
+
+    const originalWidth = productImageWidth
+    const originalHeight = productImageHeight
+    console.log('originalWidth', originalWidth)
+    console.log('originalHeight', originalHeight)
+
+    // 计算目标区域的中心点
+    const targetCenterX = product_x + product_w / 2
+    const targetCenterY = product_y + product_h / 2
+
+    let newWidth, newHeight
+
+    // 计算目标区域和原始图片的宽高比
+    const imageRatio = productImageWidth / productImageHeight
+
+    // 始终以宽度为基准进行计算
+    newWidth = product_w
+    newHeight = newWidth / imageRatio
+
+    // 如果计算出的高度超过了目标区域高度，则需要重新以高度为基准计算
+    if (newHeight > product_h) {
+      newHeight = product_h
+      newWidth = newHeight * imageRatio
+    }
+
+    // 计算新的左上角坐标，使中心点对齐
+    const newX = targetCenterX - newWidth / 2
+    const newY = targetCenterY - newHeight / 2
+    console.log(' 经过计算好的坐标大小', {
+      newX,
+      newY,
+      newWidth,
+      newHeight,
+    })
+    // console.log('newX', newX)
+    // console.log('newY', newY)
+    // console.log('newWidth', newWidth)
+    // console.log('newHeight', newHeight)
+
+    this.combineImageId.value = material_id
+    this.useSceneImage.value = url
+
+    // 更新位置信息
+    this.imagePosition.value.product = JSON.stringify({
+      type: 'image',
+      left: product_x,
+      top: product_y,
+      width: product_w,
+      height: product_h,
+    })
+
+    console.log('resetSceneImage', this.imagePosition.value.product)
+  }
+  genCombineImage = () => {
+    try {
+      this.combineState.value = GENERATE_STATUS.Generating
+
+      const { top, left, width, height, scaleX, scaleY } = JSON.parse(
+        this.imagePosition.value.product || {},
+      )
+      console.log(top, left, width, height, scaleX, scaleY)
+      if (!top || !left || !width || !height || !scaleX || !scaleY) {
+        setTimeout(() => {
+          this.genFixedSceneImage(JSON.parse(this.imagePosition.value.product))
+        }, 2000)
+      } else {
+        this.genFixedSceneImage({ top, left, width, height, scaleX, scaleY })
+      }
+    } catch (e) {
+      this.combineState.value = GENERATE_STATUS.Incomplete
+      useMessageBox({
+        message: '生图失败，请稍后再试',
+        showCancelButton: false,
+        confirmButtonText: 'OK',
+      })
+    }
+  }
+  genFixedSceneImage = async ({ top, left, width, height, scaleX, scaleY }) => {
+    try {
+      const productStore = useProductStore()
+      const result = await AiDrawService.genFixedSceneImage({
+        product: productStore.productInfo,
+        material_id: this.combineImageId.value,
+        product_url: productStore.fixedCurrentProductImage.imageUrl, //this.product.value.file_path,
+        product_x: left,
+        product_y: top,
+        product_w: width * (scaleX || 1),
+        product_h: height * (scaleY || 1),
+      }).catch((error) => {
+        // if (error.name === 'CanceledError') return;
+
+        console.error(error)
+      })
+      console.log(result)
+      if (result && result.errcode === 0) {
+        this.taskId = result.data.task_id
+        this.queryTaskResult(this.taskId)
+      } else {
+        useMessageBox({
+          message: `${result.errmsg || '系统繁忙，请稍后再试'}`,
+          showCancelButton: false,
+          confirmButtonText: 'OK',
+        })
+        this.combineState.value = GENERATE_STATUS.Incomplete
+      }
+    } catch (e) {
+      console.log(e)
+      useMessageBox({
+        message: '网络繁忙，请稍后再试',
+        showCancelButton: false,
+        confirmButtonText: 'OK',
+      })
+      this.combineState.value = GENERATE_STATUS.Incomplete
+    }
+  }
+}
+
+export const useGenerateStore = () => {
+  const imageGenerateStore = defineStore(`imageGenerateStore`, () => new ImageGenerateStore())()
+  const fixedImageGenerateStore = defineStore(
+    `fixedImageGenerateStore`,
+    () => new FixedImageGenerateStore(),
+  )()
+  const pageStore = useImageGeneratePanelPageStore()
+
+  return {
+    pageStore,
+    imageGenerateStore,
+    fixedImageGenerateStore,
+  }
+}

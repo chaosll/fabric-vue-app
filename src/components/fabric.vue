@@ -95,7 +95,7 @@ const initFabricCanvas = () => {
     
     // 扩展矩形对象，添加中点控制点
     extendRectWithMidControls();
-    
+
   } catch (error) {
     console.error('初始化Fabric画布时发生错误:', error);
   }
@@ -105,123 +105,157 @@ const initFabricCanvas = () => {
  * 扩展矩形对象，添加中点控制点
  */
 const extendRectWithMidControls = () => {
-  // 扩展矩形的控制点配置，添加边的中点控制点
+  // 引用基础控制点逻辑用于继承
+  const { controls } = Rect.prototype;
+
+  // 完全重新定义所有控制点
   Rect.prototype.controls = {
-    ...Rect.prototype.controls,
-    // 添加四边的中点控制点，允许自由变换
+    // 保留原有的四个角控制点
+    tl: controls.tl,
+    tr: controls.tr,
+    bl: controls.bl,
+    br: controls.br,
+    
+    // 自定义左中点
     ml: new Control({
       x: -0.5,
       y: 0,
       cursorStyle: 'move',
-      actionHandler: function(eventData, transformData, x, y) {
-        const target = transformData.target;
-        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+      render: function(ctx, left, top, styleOverride, fabricObject) {
+        drawControl(ctx, left, top, styleOverride, fabricObject);
+      },
+      actionHandler: function(eventData, transform, x, y) {
+        const target = transform.target;
+        const mouseLocalPosition = target.toLocalPoint({x, y}, 'center', 'center');
         
-        // 允许同时控制宽度和位置
-        const originalWidth = target.width;
+        let newWidth = Math.abs(mouseLocalPosition.x * 2);
+        let newLeft = target.left + (target.width - newWidth) / 2;
+        let newHeight = Math.abs(mouseLocalPosition.y * 2);
+        let newTop = target.top + (target.height - newHeight) / 2;
+
+        // 在一次set调用中更新所有属性
         target.set({
-          width: Math.abs(localPoint.x * 2),
-          left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+          width: newWidth,
+          left: newLeft,
+          height: newHeight,
+          top: newTop
         });
-        
-        // 同时允许调整高度
-        if (eventData.shiftKey) {
-          const originalHeight = target.height;
-          target.set({
-            height: Math.abs(localPoint.y * 2),
-            top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
-          });
-        }
         
         return true;
       },
-      actionName: 'free-transform',
+      actionName: 'scaling' // 使用'scaling'作为actionName
     }),
+    
+    // 自定义顶部中点
     mt: new Control({
       x: 0,
       y: -0.5,
       cursorStyle: 'move',
-      actionHandler: function(eventData, transformData, x, y) {
-        const target = transformData.target;
-        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+      render: function(ctx, left, top, styleOverride, fabricObject) {
+        drawControl(ctx, left, top, styleOverride, fabricObject);
+      },
+      actionHandler: function(eventData, transform, x, y) {
+        const target = transform.target;
+        const mouseLocalPosition = target.toLocalPoint({x, y}, 'center', 'center');
         
-        // 允许同时控制高度和位置
-        const originalHeight = target.height;
+        let newWidth = Math.abs(mouseLocalPosition.x * 2);
+        let newLeft = target.left + (target.width - newWidth) / 2;
+        let newHeight = Math.abs(mouseLocalPosition.y * 2);
+        let newTop = target.top + (target.height - newHeight) / 2;
+
+        // 在一次set调用中更新所有属性
         target.set({
-          height: Math.abs(localPoint.y * 2),
-          top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+          width: newWidth,
+          left: newLeft,
+          height: newHeight,
+          top: newTop
         });
-        
-        // 同时允许调整宽度
-        if (eventData.shiftKey) {
-          const originalWidth = target.width;
-          target.set({
-            width: Math.abs(localPoint.x * 2),
-            left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
-          });
-        }
         
         return true;
       },
-      actionName: 'free-transform',
+      actionName: 'scaling' // 使用'scaling'作为actionName
     }),
+    
+    // 自定义右侧中点
     mr: new Control({
       x: 0.5,
       y: 0,
       cursorStyle: 'move',
-      actionHandler: function(eventData, transformData, x, y) {
-        const target = transformData.target;
-        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+      render: function(ctx, left, top, styleOverride, fabricObject) {
+        drawControl(ctx, left, top, styleOverride, fabricObject);
+      },
+      actionHandler: function(eventData, transform, x, y) {
+        const target = transform.target;
+        const mouseLocalPosition = target.toLocalPoint({x, y}, 'center', 'center');
         
-        // 允许同时控制宽度和位置
-        const originalWidth = target.width;
+        let newWidth = Math.abs(mouseLocalPosition.x * 2);
+        let newLeft = target.left + (target.width - newWidth) / 2;
+        let newHeight = Math.abs(mouseLocalPosition.y * 2);
+        let newTop = target.top + (target.height - newHeight) / 2;
+
+        // 在一次set调用中更新所有属性
         target.set({
-          width: Math.abs(localPoint.x * 2),
-          left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
+          width: newWidth,
+          left: newLeft,
+          height: newHeight,
+          top: newTop
         });
-        
-        // 同时允许调整高度
-        if (eventData.shiftKey) {
-          const originalHeight = target.height;
-          target.set({
-            height: Math.abs(localPoint.y * 2),
-            top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
-          });
-        }
         
         return true;
       },
-      actionName: 'free-transform',
+      actionName: 'scaling' // 使用'scaling'作为actionName
     }),
+    
+    // 自定义底部中点
     mb: new Control({
       x: 0,
       y: 0.5,
       cursorStyle: 'move',
-      actionHandler: function(eventData, transformData, x, y) {
-        const target = transformData.target;
-        const localPoint = target.toLocalPoint({x, y}, 'center', 'center');
+      render: function(ctx, left, top, styleOverride, fabricObject) {
+        drawControl(ctx, left, top, styleOverride, fabricObject);
+      },
+      actionHandler: function(eventData, transform, x, y) {
+        const target = transform.target;
+        const mouseLocalPosition = target.toLocalPoint({x, y}, 'center', 'center');
         
-        // 允许同时控制高度和位置
-        const originalHeight = target.height;
+        let newWidth = Math.abs(mouseLocalPosition.x * 2);
+        let newLeft = target.left + (target.width - newWidth) / 2;
+        let newHeight = Math.abs(mouseLocalPosition.y * 2);
+        let newTop = target.top + (target.height - newHeight) / 2;
+
+        // 在一次set调用中更新所有属性
         target.set({
-          height: Math.abs(localPoint.y * 2),
-          top: target.top + (originalHeight - Math.abs(localPoint.y * 2))/2
+          width: newWidth,
+          left: newLeft,
+          height: newHeight,
+          top: newTop
         });
-        
-        // 同时允许调整宽度
-        if (eventData.shiftKey) {
-          const originalWidth = target.width;
-          target.set({
-            width: Math.abs(localPoint.x * 2),
-            left: target.left + (originalWidth - Math.abs(localPoint.x * 2))/2
-          });
-        }
         
         return true;
       },
-      actionName: 'free-transform',
-    }),
+      actionName: 'scaling' // 使用'scaling'作为actionName
+    })
   };
+};
+
+/**
+ * 辅助函数：绘制控制点
+ */
+const drawControl = (ctx, left, top, styleOverride, fabricObject) => {
+  styleOverride = styleOverride || {};
+  const size = styleOverride.cornerSize || fabricObject.cornerSize || 13;
+  const stroke = styleOverride.cornerStrokeColor || fabricObject.cornerStrokeColor || '#51B9F9';
+  const fill = styleOverride.cornerColor || fabricObject.cornerColor || '#51B9F9';
+  
+  ctx.save();
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(left, top, size / 2, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 };
 
 /**
@@ -534,6 +568,14 @@ onMounted(() => {
   nextTick(() => {
     console.log('DOM已更新，开始初始化canvas');
     initFabricCanvas();
+    // 确保 fabricCanvas 实例存在后再启用模式
+    if (fabricCanvas) {
+      drawMode.value = 'rect'
+      enableRectMode(); // 在初始化后启用矩形模式
+      console.log('矩形模式已在初始化后启用');
+    } else {
+      console.error('FabricCanvas 初始化失败，无法启用矩形模式');
+    }
   });
 });
 
