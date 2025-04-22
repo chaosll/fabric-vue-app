@@ -1,29 +1,25 @@
 <template>
-  <div class="head"> <!-- 页面主要容器 -->
-    <div class="content"> <!-- 内容区域 -->
-      <!-- Element Plus Tooltip 组件 -->
+  <div class="head">
+    <div class="content">
+      <!-- Tooltip 本身不再直接包裹触发元素 -->
       <ElTooltip
-        :visible="visible" <!-- 动态控制 Tooltip 的显示与隐藏 -->
-        class="box-item" <!-- 自定义样式类 -->
-        effect="dark" <!-- Tooltip 主题 -->
-        :content="`Value: ${inputValue}`" <!-- Tooltip 显示的内容，展示当前滑块值 -->
-        placement="top" <!-- Tooltip 的显示位置 -->
+        :visible="visible"
+        effect="dark"
+        :content="`Value: ${inputValue}`"
+        placement="top"
         :virtual-ref="tooltipTargetRef" <!-- 虚拟引用，指向动态计算的位置 -->
-        virtual-triggering <!-- 启用虚拟触发 -->
-        >
-        <!-- Tooltip 本身不再直接包裹触发元素 -->
-      </ElTooltip>
+        virtual-triggering
+        />
 
-      <!-- Range Input 滑块 -->
       <input
-        ref="inputRef" <!-- 模板引用，用于在 script 中获取 DOM 元素 -->
-        type="range" <!-- 输入框类型为范围滑块 -->
-        min="0" <!-- 最小值 -->
-        max="1" <!-- 最大值 -->
-        step="0.1" <!-- 步长 -->
-        v-model="inputValue" <!-- 双向绑定滑块的值到 inputValue 变量 -->
-        class="slider" <!-- 自定义样式类 -->
-        id="myRange" <!-- DOM ID -->
+        ref="inputRef"
+        type="range"
+        min="0"
+        max="1"
+        step="0.1"
+        v-model="inputValue"
+        class="slider"
+        id="myRange"
         />
 
       <!-- 其他内容容器 -->
@@ -81,7 +77,7 @@ const updateTooltipPosition = () => {
   const sliderWidth = inputElement.clientWidth // 获取滑块元素的内部宽度（不包括边框和滚动条）
 
   // 从 CSS 变量 `--slider-thumb-width` 读取滑块 thumb 的宽度
-  // 如果变量未定义或无效，则默认为 16px
+  // 默认为 16px
   const thumbWidthString = computedStyle.getPropertyValue('--slider-thumb-width').trim() || '16px'
   const thumbWidth = parseFloat(thumbWidthString) || 16
 
@@ -121,18 +117,15 @@ const updateTooltipPosition = () => {
 const debouncedUpdatePosition = debounce(updateTooltipPosition, 100) // 100ms 防抖
 
 // 监听 inputValue 的变化
-watch(inputValue, (newVal, oldVal) => {
+watch(inputValue,async (newVal, oldVal) => {
   console.log(newVal, '<==', oldVal) // 打印新旧值，用于调试
-  // 仅当值实际发生变化时执行
   if (newVal !== oldVal) {
     // 使用 nextTick 确保 DOM 更新完成后再计算位置
-    nextTick(() => {
-      updateTooltipPosition() // 更新 Tooltip 位置
-      visible.value = true // 显示 Tooltip
-    })
+   await nextTick()
+    updateTooltipPosition() // 更新 Tooltip 位置
+    visible.value = true // 显示 Tooltip
 
     // --- Tooltip 自动隐藏逻辑 ---
-    // 如果已有隐藏定时器，先清除
     if (timer.value) {
       clearTimeout(timer.value)
     }
@@ -143,24 +136,18 @@ watch(inputValue, (newVal, oldVal) => {
   }
 }, { immediate: false }) // 设置 immediate: false 避免初始挂载时立即触发
 
-// --- 生命周期钩子 ---
-// 组件挂载后执行
-onMounted(() => {
+onMounted(async() => {
   // 使用 nextTick 确保初始样式已应用，再进行首次位置计算
-  nextTick(() => {
-    updateTooltipPosition()
-  })
+  await nextTick()
+  updateTooltipPosition()
   // 添加窗口大小变化监听器，窗口变化时（防抖后）更新 Tooltip 位置
   window.addEventListener('resize', debouncedUpdatePosition)
 })
 
-// 组件卸载前执行
 onBeforeUnmount(() => {
-  // 清除 Tooltip 隐藏定时器
   if (timer.value) {
     clearTimeout(timer.value)
   }
-  // 移除窗口大小变化监听器，防止内存泄漏
   window.removeEventListener('resize', debouncedUpdatePosition)
 })
 </script>
@@ -192,24 +179,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-
-<!-- <style scoped lang="scss">
-.head {
-  width: 100%;
-  height: 100%;
-  background-color: #fff;
-  div {
-    padding: 20px;
-  }
-  .content {
-    display: flex;
-    justify-content: space-between;
-    flex-direction: column;
-    color: aqua;
-    background-color: rgba($color: #000000, $alpha: 0.1);
-  }
-}
-.el-popper.is-dark {
-  color: #7fae1b !important;
-}
-</style> -->
