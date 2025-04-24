@@ -14,8 +14,8 @@
 ### 安装依赖
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ### 使用组件
