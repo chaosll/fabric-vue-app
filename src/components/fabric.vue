@@ -28,6 +28,11 @@
         <div class="tool-btn" @click="reloadBackground">纯色背景</div>
         <div class="tool-btn" @click="loadImageBackground">图像背景</div>
       </div>
+      
+      <!-- 导出工具 -->
+      <div class="tool-group">
+        <div class="tool-btn" @click="exportDrawing">导出图片</div>
+      </div>
     </div>
     
     <!-- 画布容器 -->
@@ -524,6 +529,93 @@ const loadImageBackground = () => {
     }, { crossOrigin: 'anonymous' });
   } catch (error) {
     console.error('加载图像背景时出错:', error);
+  }
+};
+
+/**
+ * 导出用户绘制的内容
+ */
+const exportDrawing = () => {
+  if (!fabricCanvas) {
+    console.error('Canvas尚未初始化，无法导出');
+    return;
+  }
+  
+  try {
+    console.log('开始导出用户绘制内容');
+    
+    // 获取所有用户绘制的对象
+    const objects = fabricCanvas.getObjects();
+    if (objects.length === 0) {
+      console.warn('没有可导出的内容');
+      alert('没有可导出的内容');
+      return;
+    }
+    
+    // 保存原始状态
+    const originalBgColor = fabricCanvas.backgroundColor;
+    const objectsOriginalState = objects.map(obj => ({
+      object: obj,
+      originalState: {
+        fill: obj.fill,
+        stroke: obj.stroke,
+        strokeWidth: obj.strokeWidth
+      }
+    }));
+    
+    // 设置黑色背景
+    fabricCanvas.backgroundColor = '#000000';
+    
+    // 将所有对象设置为白色
+    objects.forEach(obj => {
+      if (obj.type === 'rect') {
+        obj.set({
+          fill: '#FFFFFF',
+          stroke: '#FFFFFF',
+          strokeWidth: 1
+        });
+      } else if (obj.type === 'path') {
+        obj.set({
+          stroke: '#FFFFFF'
+        });
+      }
+    });
+    
+    // 刷新画布
+    fabricCanvas.renderAll();
+    
+    // 导出为PNG
+    const dataURL = fabricCanvas.toDataURL({
+      format: 'png',
+      quality: 1
+    });
+    
+    // 创建下载链接
+    const link = document.createElement('a');
+    link.download = '导出图片-' + new Date().getTime() + '.png';
+    link.href = dataURL;
+    
+    // 触发下载
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // 恢复原始状态
+    fabricCanvas.backgroundColor = originalBgColor;
+    objectsOriginalState.forEach(item => {
+      item.object.set({
+        fill: item.originalState.fill,
+        stroke: item.originalState.stroke,
+        strokeWidth: item.originalState.strokeWidth
+      });
+    });
+    
+    // 刷新画布恢复原样
+    fabricCanvas.renderAll();
+    
+    console.log('导出完成');
+  } catch (error) {
+    console.error('导出图片时发生错误:', error);
   }
 };
 
