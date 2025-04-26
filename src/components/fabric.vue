@@ -48,9 +48,9 @@ import {
   Canvas,
   Rect,
   PencilBrush,
-  Image as FabricImage,
   Control,
-  controlsUtils
+  controlsUtils,
+  FabricImage
 } from 'fabric';
 
 // 画布相关引用
@@ -68,7 +68,7 @@ let startPoint = null;
 let currentRect = null;
 
 // 背景图URL - 使用更可靠的图片源
-const backgroundImageUrl = ref('https://placehold.co/800x600');
+const backgroundImageUrl = '../../public/images/background.jpg';
 
 /**
  * 初始化Fabric画布
@@ -95,7 +95,6 @@ const initFabricCanvas = () => {
     
     console.log('Fabric画布已创建:', fabricCanvas);
     
-    // 设置背景图片
     setBackgroundImage();
     
     // 扩展矩形对象，添加中点控制点
@@ -245,7 +244,7 @@ const setupRectControls = (rect) => {
 };
 
 /**
- * 设置背景图片
+ * 设置纯色背景
  */
 const setBackgroundImage = () => {
   if (!fabricCanvas) {
@@ -260,24 +259,6 @@ const setBackgroundImage = () => {
     fabricCanvas.backgroundColor = '#e0f7fa';
     fabricCanvas.renderAll();
     
-    // 在画布中央绘制一个标记，确认canvas能正常工作
-    const centerRect = new Rect({
-      left: fabricCanvas.width / 2 - 50,
-      top: fabricCanvas.height / 2 - 50,
-      width: 100,
-      height: 100,
-      fill: '#80deea',
-      stroke: '#00acc1',
-      strokeWidth: 2,
-    });
-    
-    // 设置控制点样式
-    setupRectControls(centerRect);
-    
-    fabricCanvas.add(centerRect);
-    fabricCanvas.renderAll();
-    
-    console.log('背景和中心矩形已设置');
   } catch (error) {
     console.error('设置背景时发生错误:', error);
   }
@@ -482,54 +463,18 @@ const reloadBackground = () => {
 /**
  * 尝试加载图像作为背景
  */
-const loadImageBackground = () => {
+const loadImageBackground =async() => {
   if (!fabricCanvas) {
     console.error('Canvas尚未初始化，无法设置背景图');
     return;
   }
-  
-  try {
-    console.log('尝试加载图像作为背景:', backgroundImageUrl.value);
-    
-    // 使用FabricImage加载图像
-    FabricImage.fromURL(backgroundImageUrl.value, (img) => {
-      if (!img) {
-        console.error('无法加载背景图片');
-        return;
-      }
-      
-      // 调整图片大小以适应画布
-      const canvasWidth = fabricCanvas.width;
-      const canvasHeight = fabricCanvas.height;
-      
-      console.log('图片尺寸:', img.width, 'x', img.height);
-      console.log('画布尺寸:', canvasWidth, 'x', canvasHeight);
-      
-      // 计算缩放比例，确保图片适合画布
-      const scaleX = canvasWidth / img.width;
-      const scaleY = canvasHeight / img.height;
-      const scale = Math.min(scaleX, scaleY);
-      
-      // 设置图片属性
-      img.set({
-        scaleX: scale,
-        scaleY: scale,
-        originX: 'center',
-        originY: 'center',
-        left: canvasWidth / 2,
-        top: canvasHeight / 2,
-        selectable: false // 背景不可选中
-      });
-      
-      // 设置为背景图片
-      fabricCanvas.backgroundImage = img;
-      fabricCanvas.renderAll();
-      
-      console.log('背景图片已设置');
-    }, { crossOrigin: 'anonymous' });
-  } catch (error) {
-    console.error('加载图像背景时出错:', error);
-  }
+  const oImg = await FabricImage.fromURL(backgroundImageUrl)
+  // scale image down, and flip it, before adding it onto canvas
+  // oImg.scale(0.5).set('flipX', true);
+  console.log('oImg', oImg);
+  oImg.width = 800;
+  oImg.height = 600;
+  fabricCanvas.add(oImg);
 };
 
 /**
@@ -568,6 +513,10 @@ const exportDrawing = () => {
     
     // 将所有对象设置为白色
     objects.forEach(obj => {
+      // 删除背景图片
+      if (obj.type === 'image') {
+        fabricCanvas.remove(obj);
+      }
       if (obj.type === 'rect') {
         obj.set({
           fill: '#FFFFFF',
@@ -637,10 +586,8 @@ watch(() => brushSize.value, (newSize) => {
 
 <style>
 .fabric-container {
-  display: flex;
-  flex-direction: column;
   width: 100%;
-  height: 100vh;
+  background-color: red;
 }
 
 .toolbar {
